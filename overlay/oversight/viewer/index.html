@@ -1,0 +1,778 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>oversight viewer</title>
+<style>
+*{box-sizing:border-box} body{margin:0;font-family:Helvetica,Arial,sans-serif;font-size:12px;color:#222;background:#f3f3f3}
+.top{background:#2b2b2b;color:#eee;padding:6px 12px;display:flex;gap:14px;align-items:center}
+.top b{font-size:13px} .top span{background:#444;border-radius:4px;padding:2px 8px;font-size:11px}
+.wrap{display:grid;grid-template-columns:230px 1fr;grid-template-rows:1fr 230px;height:calc(100vh - 32px)}
+.pane{background:#fff;border:1px solid #cfcfcf;margin:6px;overflow:auto;position:relative}
+.pane h3{font-size:10.5px;letter-spacing:.5px;color:#555;margin:0;padding:6px 8px;border-bottom:1px solid #e5e5e5;position:sticky;top:0;z-index:6;background:#fff}
+.lab{position:absolute;left:-1px;top:-1px;background:#1f6feb;color:#fff;font-weight:bold;font-size:11px;border-radius:0 0 8px 0;padding:1px 7px}
+#A{grid-row:1/3}
+.sess{border:1px solid #bbb;border-radius:4px;margin:6px;padding:5px 7px;font-size:11px;cursor:pointer}
+.sess.cur{border-color:#1f6feb;background:#eef4ff}
+.sess b{display:block}
+.sess .m{color:#555}
+#C svg{display:block}
+.node{cursor:pointer}
+.node rect{fill:#fff;stroke:#333;stroke-width:1.4;rx:5}
+.node.main rect{fill:#f4f7ff;stroke:#1f6feb}
+.node.old rect{fill:#f2f2f2;stroke:#999}
+.node.sel rect{stroke:#c0392b;stroke-width:2.5}
+.node.hot rect{stroke:#c0392b;stroke-width:2;stroke-dasharray:5 2}
+.node text{font-size:10.5px}
+.node .t{font-weight:bold;font-size:11px}
+.node .st{font-size:9.5px;fill:#fff !important}
+.edge{fill:none;stroke:#9aa4b2;stroke-width:1.1;opacity:.55;transition:opacity .12s,stroke-width .12s}
+.edge.data{stroke:#4a90d9;opacity:.55}
+.edge.group{stroke:#1f6feb;stroke-width:2.2;opacity:.6}
+.gmark rect{fill:#eaf2fd;stroke:#4a90d9;stroke-width:1}
+.gmark text{font-size:9px;fill:#1a5fb4}
+.gmark.lit rect{fill:#d6e6fb;stroke:#1f6feb;stroke-width:1.6}
+.edge.group.lit{stroke-width:3.2}
+.edge.conflict{stroke:#c0392b;stroke-dasharray:5 3;stroke-width:1.7;opacity:.95}
+.edge.spawn{stroke:#6b7685;opacity:.8}
+.edge.lit{opacity:1;stroke-width:2}
+.edge.dim{opacity:.16}
+.elbl{font-size:9px;fill:#1f6feb;opacity:0}
+.elbl.conflict{fill:#c0392b}
+.elbl.lit{opacity:1;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
+.node.faded rect{opacity:.72} .node.faded text{opacity:.75}
+.ekey{font-size:10px;color:#444;padding:3px 10px 5px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #eee}
+.ekey i{display:inline-block;width:22px;height:0;border-top-width:2px;vertical-align:middle;margin-right:5px}
+.ekey label{cursor:pointer;user-select:none} .ekey input{vertical-align:middle;margin:0 3px 0 0}
+#D .row{font-family:Menlo,monospace;font-size:10.5px;padding:2px 8px;border-bottom:1px solid #f0f0f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#D .row.sel{background:#fff3e0}
+.card{position:absolute;right:8px;top:34px;width:300px;background:#fff;border:1px solid #cfcfcf;
+ border-left-width:4px;border-radius:4px;font-size:11px;line-height:1.45;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.card.ok{border-left-color:#2e8b57} .card.warn{border-left-color:#d99a14} .card.hot{border-left-color:#c0392b}
+.card .ch{position:relative;padding-right:26px!important;font-size:10.5px;letter-spacing:.5px;color:#555;padding:6px 8px;border-bottom:1px solid #e5e5e5;font-weight:bold}
+.card .cv{display:flex;align-items:center;gap:7px;padding:7px 8px 2px;font-weight:bold;font-size:12px;color:#222}
+.card .cdot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.card.ok .cdot{background:#2e8b57} .card.warn .cdot{background:#d99a14} .card.hot .cdot{background:#c0392b}
+.card.hot .cv{color:#c0392b}
+.card .cn{padding:0 8px 6px 23px;color:#555}
+.card .crow{display:grid;grid-template-columns:72px 1fr;gap:6px;padding:4px 8px;align-items:start;border-top:1px solid #f0f0f0}
+.card .cl{color:#777;font-size:9.5px;letter-spacing:.5px;padding-top:2px}
+.card .cvv{display:flex;flex-wrap:wrap;gap:4px}
+.card .chip{font:inherit;font-size:10.5px;border:1px solid #bbb;background:#fff;color:#222;border-radius:4px;padding:0 6px;cursor:pointer}
+.card .chip:hover,.card .chip:focus-visible{border-color:#1f6feb;background:#eef4ff;outline:none}
+.card .chip.use{border-color:#9ec5ff;color:#1f6feb}
+.card .none{color:#999;font-style:italic}
+.card .cfiles{border-top:1px solid #f0f0f0;padding:4px 8px 7px}
+.card .cfiles summary{cursor:pointer;color:#555;font-size:9.5px;letter-spacing:.5px;font-weight:bold}
+.card .cfiles ul{margin:4px 0 0;padding-left:14px;color:#444;font-family:Menlo,monospace;font-size:9.5px;word-break:break-all}
+.card .cfiles li.more{list-style:none;margin-left:-14px;color:#888;font-family:inherit;font-style:italic}
+.ov{display:flex;gap:10px;padding:8px}
+.col{min-width:40px}
+.col .h{font-size:10px;font-weight:bold;margin-bottom:3px}
+.r{height:8px;width:36px;border-radius:2px;margin-bottom:2px;border:1px solid rgba(0,0,0,.15);position:relative;cursor:pointer}
+.r.selr{outline:2px solid #1f6feb;outline-offset:1px}
+.r.hascp{box-shadow:inset 4px 0 0 #0d9488}
+.r .cpmark{position:absolute;left:40px;top:-3px;white-space:nowrap;font:9px Menlo,monospace;color:#0d9488;pointer-events:none}
+.r.selr .cpmark{display:none}
+.r.hasw{box-shadow:inset 4px 0 0 #7c3aed}
+.r .cpmark.w{color:#7c3aed}
+.r .cptag.w{color:#7c3aed;border-color:#c4b5fd}
+.r .cptag{position:absolute;left:41px;top:-4px;z-index:5;white-space:nowrap;font:bold 9.5px Menlo,monospace;color:#0d9488;background:#fff;border:1px solid #9fd8cf;border-radius:3px;padding:0 4px;line-height:14px;pointer-events:none}
+.r .cptag.none{color:#888;border-color:#ddd;font-weight:normal}
+.card .ch .cx{position:absolute;right:4px;top:2px;border:0;background:none;font-size:15px;line-height:15px;color:#777;cursor:pointer;padding:1px 5px;border-radius:3px}
+.card .ch .cx:hover{background:#eee;color:#222}
+.gbanner .gshow{margin-left:8px;font:inherit;font-size:10.5px;padding:1px 7px;border:1px solid #d9a441;background:#fff;color:#8a5a00;border-radius:3px;cursor:pointer}
+.legend{font-size:10px;color:#444;padding:4px 8px;display:flex;gap:10px;flex-wrap:wrap}
+.btn{font:inherit;font-size:10.5px;border:1px solid #bbb;background:#fff;color:#222;border-radius:4px;padding:3px 9px;cursor:pointer}
+.btn:hover{border-color:#1f6feb;background:#eef4ff}
+.btn:focus-visible,.rbtn:focus-visible{outline:2px solid #1f6feb;outline-offset:1px}
+.btn.pri{background:#1f6feb;border-color:#1f6feb;color:#fff} .btn.pri:hover{background:#1a5fd0}
+.btn.danger{border-color:#c0392b;color:#c0392b} .btn.danger:hover{background:#fdf0ee}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.rbtn{font:inherit;font-size:9.5px;margin-left:8px;border:1px solid #bbb;background:#fff;border-radius:3px;padding:0 5px;cursor:pointer;color:#555}
+.rbtn:hover{border-color:#1f6feb;color:#1f6feb}
+.gbanner{background:#fff4e0;border-bottom:1px solid #f0c77a;color:#8a5a00;font-size:11px;padding:5px 10px;font-weight:bold}
+.card.gcard,.card.pcard{width:344px}
+.card .pc{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px 8px;border-top:1px solid #f0f0f0}
+.card .pc>div{border:1px solid #e5e5e5;border-radius:4px;padding:5px 7px;min-height:42px}
+.card .pc b{display:block;font-size:9.5px;color:#555;letter-spacing:.5px;margin-bottom:2px}
+.card .pc i{color:#999;font-size:10px}
+.card textarea{box-sizing:border-box;width:calc(100% - 16px);margin:4px 8px;font:inherit;font-size:10.5px;border:1px solid #cfcfcf;border-radius:4px;padding:4px 6px;min-height:36px;resize:vertical}
+.card textarea.big{min-height:120px;font-family:Menlo,monospace;font-size:9.5px}
+.card .gbtns{display:flex;flex-wrap:wrap;gap:5px;padding:6px 8px 8px;align-items:center}
+.card .gbtns select{font:inherit;font-size:10.5px;border:1px solid #bbb;border-radius:4px;padding:2px}
+.card .gmeta{padding:0 8px 7px;color:#888;font-size:9.5px}
+.card .perr{color:#c0392b;padding:4px 8px;font-size:10.5px}
+.card .pwarn{color:#8a5a00;background:#fff8e8;border:1px solid #f0d9a8;border-radius:4px;margin:4px 8px;padding:4px 7px;font-size:10px}
+.card .cact{display:flex;flex-wrap:wrap;gap:5px;padding:6px 8px 8px;border-top:1px solid #f0f0f0}
+.card .brief{margin:0 8px 6px;padding:5px 7px;border:1px solid #eee;border-radius:4px;max-height:110px;overflow:auto;white-space:pre-wrap;font-family:Menlo,monospace;font-size:9px;color:#444}
+.card .flist{margin:0;padding-left:14px;font-family:Menlo,monospace;font-size:9.5px;color:#444;word-break:break-all}
+.pill{border-radius:4px;padding:2px 8px;font-size:11px;font-weight:bold}
+.pill.run{background:#2e8b57;color:#fff} .pill.pause{background:#d99a14;color:#fff} .pill.end{background:#444;color:#ccc}
+.gtog{font-size:11px;color:#ddd;cursor:pointer;user-select:none} .gtog input{vertical-align:middle}
+.node.prop rect{fill:#fffaf0;stroke:#d99a14;stroke-dasharray:5 3;stroke-width:1.6}
+.edge.prop{stroke:#d99a14;stroke-dasharray:5 3;opacity:.9}
+.wrap.dclosed{grid-template-rows:1fr 0} .wrap.dclosed #D{display:none}
+#D>h3.dhead{position:sticky;top:0;z-index:3;background:#fff;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dctl{margin-left:auto;display:flex;gap:5px}
+.dwhy{font-weight:normal;letter-spacing:0;color:#8a5a00;background:#fff4e0;border:1px solid #f0c77a;border-radius:4px;padding:0 6px;font-size:10px}
+.edge.stale{stroke:#d99a14;stroke-dasharray:3 3;opacity:.95}
+#events .row.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.card .dlist{margin:0;padding:0;list-style:none}
+.card .dlist li{padding:2px 0 3px;border-bottom:1px dotted #eee}
+.card .dlist li.d2{padding-left:14px}
+.card .dlist .why{display:block;color:#666;font-size:9.5px;margin-top:1px}
+.card .rlist{margin:2px 0 0;padding-left:13px;font-size:10px;color:#333}
+.card .rlist li{margin-bottom:2px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle;margin-right:3px}
+.empty{padding:20px;color:#777}
+.cp{border-bottom:1px solid #eee;padding:4px 8px;font-size:10.5px;cursor:pointer;line-height:1.35}
+.cp:hover{background:#eef4ff}
+.cp.sel{background:#fff3e0}
+.cp b{font-family:Menlo,monospace;color:#0d9488;font-weight:normal}
+.cp .pth{font-family:Menlo,monospace;color:#222;word-break:break-all}
+.cp .who{color:#666}
+</style></head><body>
+<div class="top"><b>oversight viewer</b><span id="task"></span><span id="cnt"></span><span id="runpill" class="pill end" hidden></span>
+<label class="gtog" id="gtogwrap" hidden><input type="checkbox" id="gateTog"> pause agent when it proposes a split</label>
+<label class="gtog" id="rtogwrap" hidden><input type="checkbox" id="recTog"> show recommendations</label>
+<span id="livehint" style="margin-left:auto;color:#aaa">refresh the page to re-read events.jsonl</span></div>
+<div class="wrap dclosed" id="wrap">
+  <div class="pane" id="A"><div class="lab">A</div><h3>&nbsp;&nbsp;SESSIONS</h3><div id="sessions"></div>
+    <h3>OVERVIEW (one rectangle per event)</h3><div class="legend" id="legend"></div><div class="ov" id="overview"></div></div>
+  <div class="pane" id="C"><div class="lab">C</div><h3>&nbsp;&nbsp;WORK DAG · nodes = orchestrator + each spawned subagent · solid = spawned by · blue = reads a file another node wrote · red dashed = writes a file another node wrote</h3><div id="gbanner" class="gbanner" hidden></div><div class="ekey">
+    <span><i style="border-top:2px solid #8d98a7"></i>spawned by</span>
+    <span><i style="border-top:2px solid #1f6feb"></i>reads another node's file</span>
+    <span><i style="border-top:3px solid #1f6feb"></i>read by a whole group</span>
+    <span><i style="border-top:2px dashed #c0392b"></i>both wrote the same file</span>
+    <span><i style="border-top:2px dashed #d99a14"></i>input changed since it was read (stale)</span>
+    <span><i style="border:1.5px dashed #d99a14;height:8px;width:14px;background:#fffaf0"></i>proposed split, waiting for you</span>
+    <button class="rbtn" id="dOpen" style="margin-left:0">open history</button>
+    <span style="margin-left:auto;color:#777">impact is <b style="color:#c0392b">red</b> when 2+ nodes read its files, or another session wrote the same file</span>
+    <label><input type="checkbox" id="tgSpawn" checked>spawn</label>
+    <label><input type="checkbox" id="tgData" checked>data</label>
+    <label><input type="checkbox" id="tgConf" checked>conflict</label>
+   </div><div id="dag"></div><div id="card"></div></div>
+  <div class="pane" id="D"><div class="lab">D</div><h3 class="dhead"><span id="dtitle">&nbsp;&nbsp;MESSAGE / EVENT HISTORY</span><span id="dwhy"></span>
+ <span class="dctl"><button class="rbtn" id="dAll">show all</button><button class="rbtn" id="dClose">close</button></span></h3><div id="events"></div></div>
+</div>
+<script>
+// Distinct hues: prompt/start/stop/other were four near-greys and unreadable next to each other.
+const COLORS={prompt:'#111111',spawn:'#1f6feb',write:'#8e6cd6',read:'#9ec5ff',bash:'#2e8b57',todo:'#e6c229',compact:'#e67e22',stop:'#64748b',start:'#0d9488',intervention:'#b83280',other:'#e9ecef'};
+function kind(e){const t=e.tool_name||'';
+ if(e.ov_event==='split_proposed')return'spawn';
+ if(e.ov_event==='intervention'||e.ov_event==='instruction_delivered')return'intervention';
+ if(e.ov_event==='prompt')return'prompt'; if(e.ov_event==='subagent_start')return'spawn';
+ if(e.ov_event==='pre_tool'&&(t==='Agent'||t==='Task'))return'spawn';
+ if(e.ov_event==='pre_tool'&&['Edit','Write','MultiEdit'].includes(t))return'write';
+ if(e.ov_event==='pre_tool'&&['Read','Glob','Grep'].includes(t))return'read';
+ if(e.ov_event==='post_tool'&&t==='Bash'&&bWrites(e).length)return'write';
+ if(e.ov_event==='pre_tool'&&t==='Bash')return'bash'; if(e.ov_event==='pre_tool'&&t==='TodoWrite')return'todo';
+ if(e.ov_event==='pre_compact')return'compact'; if(e.ov_event==='stop'||e.ov_event==='subagent_stop')return'stop';
+ if(e.ov_event==='session_start')return'start'; return 'other';}
+let ROOT='';
+function norm(f){if(!f)return f;
+ if(ROOT&&f.startsWith(ROOT+'/'))return f.slice(ROOT.length+1);
+ return f;}
+function fp(e){const i=e.tool_input||{};return norm(i.file_path||i.pattern||i.path||'');}
+// Files an event wrote/read inside Bash (record.py adds these). Ambiguous diffs taken while a
+// subagent was running are skipped: they cannot be attributed to one node.
+function bWrites(e){return (e.ov_bash_writes_ambiguous?[]:(e.ov_bash_writes||[]));}
+// files this command wrote but did not name (ambiguous diff, or the dropped remainder of a
+// mixed command). Attributable only if no other node's window covers them.
+function bUnnamed(e){return (e.ov_bash_writes_ambiguous?(e.ov_bash_writes||[]):[]).concat(e.ov_bash_writes_dropped||[]);}
+function bReads(e){return e.ov_bash_reads||[];}
+function isHuman(t){t=(t||'').trimStart();return t&&!t.startsWith('<task-notification')&&t.slice(0,200).indexOf('<task-id>')<0;}
+function build(evs){
+ // one column per launch of `claude` (record.py counts launches / resumes as ov_session_no);
+ // fall back to Claude's own session_id for logs recorded without that field
+ ROOT=(evs.find(e=>e.cwd)||{}).cwd||'';
+ evs=evs.filter(e=>e.session_id).map(e=>Object.assign({},e,{session_id:e.ov_session_no?('launch-'+e.ov_session_no):e.session_id})).sort((a,b)=>a.ov_ts-b.ov_ts);
+ const sessIds=[];evs.forEach(e=>{if(!sessIds.includes(e.session_id))sessIds.push(e.session_id)});
+ const S={};sessIds.forEach((id,i)=>S[id]={id,tag:'S'+(i+1),first:null,last:null,events:[],spawns:0,tools:0,files:new Set(),ended:false});
+ const nodes={},order=[];const pendingSpawn={};const live={};const unnamed={};  // agent_id -> current node key (ids get reused)
+ sessIds.forEach(id=>{const k='main:'+id;nodes[k]={id:k,type:'orchestrator',session:id,prompt:'',start:null,stop:null,writes:new Set(),reads:new Set(),events:[],main:true};order.push(k);});
+ evs.forEach(e=>{const s=S[e.session_id];s.first=s.first??e.ov_ts;s.last=e.ov_ts;s.events.push(e);
+  const k=kind(e);if(e.ov_event==='pre_tool')s.tools++;
+  if(e.ov_event==='session_end'||(e.ov_event==='stop'&&!e.agent_id))s.ended=true;
+  if(k==='spawn'&&e.ov_event==='pre_tool'){e.__caller=(e.agent_id&&nodes[live[e.agent_id]||e.agent_id])?(live[e.agent_id]||e.agent_id):('main:'+e.session_id);(pendingSpawn[e.session_id]=pendingSpawn[e.session_id]||[]).push(e);}
+  if(e.ov_event==='subagent_start'){const q=pendingSpawn[e.session_id]||[];const sp=q.shift();s.spawns++;
+   let key=e.agent_id;if(nodes[key]){let i=2;while(nodes[e.agent_id+'#'+i])i++;key=e.agent_id+'#'+i;}
+   live[e.agent_id]=key;
+   nodes[key]={id:key,type:e.agent_type||'subagent',session:e.session_id,
+    intent:sp?((sp.tool_input||{}).description||''):'',spawnTs:sp?sp.ov_ts:null,
+    prompt:sp?(sp.tool_input||{}).prompt||(sp.tool_input||{}).description||'':'',
+    start:e.ov_ts,stop:null,writes:new Set(),reads:new Set(),events:[],main:false,parent:(sp&&sp.__caller)||('main:'+e.session_id)};order.push(key);}
+  const ownerKey=e.agent_id?(live[e.agent_id]||e.agent_id):null;
+  const owner=ownerKey&&nodes[ownerKey]?nodes[ownerKey]:nodes['main:'+e.session_id];
+  if(owner){e.__node=owner.id;owner.events.push(e);if(k==='write'&&fp(e)){owner.writes.add(fp(e));s.files.add(fp(e));}if(k==='read'&&fp(e))owner.reads.add(fp(e));
+   bWrites(e).forEach(f=>{owner.writes.add(f);s.files.add(f);});bReads(e).forEach(f=>owner.reads.add(f));
+   bUnnamed(e).forEach(f=>{(unnamed[f]=unnamed[f]||new Set()).add(owner.id);});}
+  if(e.ov_event==='subagent_stop'){const kk=live[e.agent_id]||e.agent_id;if(nodes[kk]){nodes[kk].stop=e.ov_ts;nodes[kk].summary=e.last_assistant_message||'';}}
+ });
+ // three-tier attribution: a file nobody named, whose window belongs to exactly one node, is
+ // that node's likely write; shared windows stay unattributed.
+ const confident=new Set();order.forEach(k=>nodes[k].writes.forEach(f=>confident.add(f)));
+ const unattributed=[];
+ Object.entries(unnamed).forEach(([f,owners])=>{
+  if(confident.has(f))return;
+  if(owners.size===1){const k=[...owners][0];if(nodes[k])(nodes[k].likely=nodes[k].likely||new Set()).add(f);}
+  else unattributed.push({file:f,agents:[...owners]});
+ });
+ order.forEach(k=>{nodes[k].likely=nodes[k].likely||new Set();});
+ // edges
+ const edges=[];order.forEach(k=>{const n=nodes[k];if(n.parent)edges.push({from:n.parent,to:k,kind:'spawn'});});
+ const writersOf={};order.forEach(k=>nodes[k].writes.forEach(f=>{(writersOf[f]=writersOf[f]||[]).push(k)}));
+ // Data edges: from the contract graph (a node consumed the version another produced) when the
+ // server supplies it; otherwise the older rule, "read a file another node wrote".
+ if(GRAPH)GRAPH.forEach(g=>{const a=mapCaller(g.src),b=mapCaller(g.dst);if(!nodes[a]||!nodes[b]||a===b)return;
+  if(nodes[a].main&&nodes[a].session===nodes[b].session)return;
+  g.files.forEach(f=>edges.push({from:a,to:b,kind:'data',label:f.split('/').pop(),stale:g.stale.includes(f)}));});
+ order.forEach(k=>{const n=nodes[k];if(!GRAPH)n.reads.forEach(f=>{(writersOf[f]||[]).forEach(w=>{if(w!==k&&!(nodes[w].main&&nodes[w].session===n.session))edges.push({from:w,to:k,kind:'data',label:f.split('/').pop()})})});
+  n.writes.forEach(f=>{(writersOf[f]||[]).forEach(w=>{if(w!==k&&order.indexOf(w)<order.indexOf(k))edges.push({from:w,to:k,kind:'conflict',label:f.split('/').pop()})})});});
+ // Collapse parallel edges: 44 separate lines between the same pairs was unreadable. One edge
+ // per (from,to,kind), carrying the list of files it represents.
+ const merged={};
+ edges.forEach(e=>{const k=e.from+'|'+e.to+'|'+e.kind;
+  if(!merged[k])merged[k]={from:e.from,to:e.to,kind:e.kind,files:[],stale:false};if(e.stale)merged[k].stale=true;
+  if(e.label&&!merged[k].files.includes(e.label))merged[k].files.push(e.label);});
+ let edges2=Object.values(merged).map(e=>({...e,
+  label:e.files.length?(e.files.length===1?e.files[0]:e.files[0]+' +'+(e.files.length-1)):''}));
+ // Fan-out aggregation. The graph is hub-and-spoke: a producer's file is read by every sibling
+ // in a group. N lines to N siblings is N times the ink for one fact, so collapse them into a
+ // single edge aimed at the group, labelled with the count. Spawn edges are never aggregated -
+ // the tree must stay explicit.
+ const groupOf=k=>(nodes[k]&&nodes[k].parent)||null;
+ const bucket={};
+ edges2.forEach(e=>{if(e.kind!=='data')return;const g=groupOf(e.to);if(!g)return;
+  const key=e.from+'|'+g;(bucket[key]=bucket[key]||[]).push(e);});
+ const collapsed=new Set(),extra=[];
+ Object.entries(bucket).forEach(([key,list])=>{
+  if(list.length<3)return;                      // only worth it for a real fan-out
+  const [from,g]=key.split('|');
+  list.forEach(e=>collapsed.add(e));
+  const files=[...new Set(list.flatMap(e=>e.files))];
+  extra.push({from,to:'group:'+key,kind:'data',group:true,groupParent:g,members:list.map(e=>e.to),files,
+   label:'read by '+list.length+(files.length?' · '+files[0].split('/').pop()+(files.length>1?' +'+(files.length-1):''):'')});
+ });
+ edges2=edges2.filter(e=>!collapsed.has(e)).concat(extra);
+ return {S,sessIds,nodes,order,edges:edges2,evs,unattributed};
+}
+let M=null,sel=null,CPS=[];
+// checkpoints.txt lines: "c004 src/chroma.py 5c0acb323c84 agent=main session=1 via=bash"
+function parseCps(lines){return (lines||[]).map(l=>{const p=l.trim().split(/\s+/);if(p.length<3)return null;
+ const kv={};p.slice(3).forEach(x=>{const i=x.indexOf('=');if(i>0)kv[x.slice(0,i)]=x.slice(i+1);});
+ return {cid:p[0],path:p[1],hash:p[2],agent:kv.agent||'main',session:kv.session||'1',via:kv.via||'tool'};}).filter(Boolean);}
+
+// which node made this checkpoint: find the event carrying the id, else fall back to agent field
+function cpNode(c){
+ for(const e of allEvs()){
+  const ids=[e.ov_checkpoint].concat(e.ov_checkpoint_bash||[]);
+  if(ids.includes(c.cid))return {key:e.__node||('main:'+e.session_id),ev:e};
+ }
+ if(c.agent==='main')return {key:'main:'+(M?M.sessIds[0]:''),ev:null};
+ return {key:(M&&M.nodes[c.agent])?c.agent:null,ev:null};
+}
+
+// events as build() tagged them (node owner, launch-based session id); M.evs holds the raw log
+function allEvs(){return M?M.sessIds.flatMap(id=>M.S[id].events):[];}
+function cpsForNode(key){
+ const out=[];
+ CPS.forEach(c=>{
+  for(const e of allEvs()){
+   const ids=[e.ov_checkpoint].concat(e.ov_checkpoint_bash||[]);
+   if(ids.includes(c.cid)&&(e.__node||('main:'+e.session_id))===key){out.push({c:c,ev:e});break;}
+  }});
+ return out;}
+
+function renderCps(){const d=document.getElementById('cps');if(!d)return;d.innerHTML='';
+ if(!CPS.length){d.innerHTML='<div class="empty" style="padding:10px;font-size:11px">no checkpoints yet</div>';return;}
+ CPS.forEach(c=>{const t=cpNode(c);const n=t.key&&M.nodes[t.key];
+  const who=n?(n.main?'orchestrator':(n.type+' '+t.key.slice(0,10))):c.agent.slice(0,10);
+  const row=document.createElement('div');row.className='cp'+(sel&&sel===t.key?' sel':'');
+  const inWs=!c.path.startsWith('/tmp');
+  row.innerHTML='<b>'+c.cid+'</b> <span class="pth">'+c.path.split('/').slice(-2).join('/')+'</span>'+
+                (inWs?'':' <span style="color:#b45309">(outside workspace)</span>')+
+                '<br><span class="who">&#9679; '+who+(c.via==='bash'?' · via bash':'')+'</span>';
+  row.title=c.path+'\nsha '+c.hash+'\nagent '+c.agent;
+  row.onclick=()=>{if(t.key&&M.nodes[t.key])select(t.key,t.ev);};
+  d.appendChild(row);});}
+function renderSessions(){const d=document.getElementById('sessions');d.innerHTML='';M.sessIds.forEach(id=>{const s=M.S[id];const mins=Math.round((s.last-s.first)/60000);
+ const div=document.createElement('div');div.className='sess'+(id===M.sessIds[M.sessIds.length-1]?' cur':'');
+ div.innerHTML=`<b>${s.tag} · ${new Date(s.first).toLocaleString()}</b><span class="m">${s.spawns} subagents · ${s.tools} tool calls · ${mins} min · ${s.files.size} files changed</span>`;d.appendChild(div);});
+ if(!M.sessIds.length)d.innerHTML='<div class="empty">no events yet</div>';
+ const lg=document.getElementById('legend');lg.innerHTML=Object.entries(COLORS).filter(([k])=>k!=='other').map(([k,c])=>`<span><i style="background:${c}"></i>${k}</span>`).join('')+'<span style="color:#0d9488"><i style="background:#fff;box-shadow:inset 4px 0 0 #0d9488"></i>cNNN = checkpoint (taken just before a file change)</span>'+'<span style="color:#7c3aed"><i style="background:#fff;box-shadow:inset 4px 0 0 #7c3aed"></i>wNNN = workspace checkpoint (at each human decision)</span>';
+ const ov=document.getElementById('overview');ov.innerHTML='';M.sessIds.forEach(id=>{const s=M.S[id];const col=document.createElement('div');col.className='col';col.innerHTML=`<div class="h">${s.tag}</div>`;
+  s.events.forEach(e=>{const r=document.createElement('div');r.className='r';r.style.background=COLORS[kind(e)];const cps=[e.ov_checkpoint].concat(e.ov_checkpoint_bash||[]).filter(Boolean);
+   r.title=(cps.length?cps.join(', ')+' · ':'')+(e.ov_event||'')+' '+(e.tool_name||'')+' '+fp(e)+(e.agent_id?' ['+e.agent_id+']':'');
+   r.onclick=()=>{select(e.__node&&M.nodes[e.__node]?e.__node:'main:'+id,e);markRect(e);};
+   if(cps.length){r.classList.add('hascp');const m=document.createElement('span');m.className='cpmark';m.textContent=cps.join(', ');r.appendChild(m);}
+   const ws=wIds(e);if(ws.length){r.classList.add('hasw');const m=document.createElement('span');m.className='cpmark w';m.textContent=ws.join(' \u2192 ');r.appendChild(m);}
+   if(SELRECT===e.ov_ts+'|'+(e.ov_event||''))tagRect(r,e);col.appendChild(r);});ov.appendChild(col);});}
+// the clicked Overview rectangle shows the checkpoint id(s) it produced, the same ids the reset menus use
+let SELRECT=null;
+function wIds(e){return e.ov_event==='intervention'?[...new Set([e.checkpoint_before,e.checkpoint_after].filter(x=>x&&/^w\d/.test(x)))]:[];}
+function tagRect(r,e){const cps=[e.ov_checkpoint].concat(e.ov_checkpoint_bash||[]).filter(Boolean),ws=wIds(e);
+ r.classList.add('selr');const t=document.createElement('span');t.className='cptag'+(cps.length?'':ws.length?' w':' none');
+ t.textContent=cps.length?cps.join(', '):ws.length?'workspace '+ws.join(' \u2192 '):'no checkpoint';r.appendChild(t);}
+function markRect(e){SELRECT=e.ov_ts+'|'+(e.ov_event||'');renderSessions();}
+function layout(){const cols={};M.sessIds.forEach((id,i)=>cols[id]=i);const pos={};
+ const W=178,H=74,GX=12,GY=38,MAXC=3;   // MAXC: children per row inside one parent's block
+ M.sessIds.forEach(id=>{
+  const subs=M.order.filter(k=>!M.nodes[k].main&&M.nodes[k].session===id);
+  const root='main:'+id;
+  const kids={};subs.forEach(k=>{const p=M.nodes[k].parent||root;(kids[p]=kids[p]||[]).push(k);});
+  // width in columns that a node's whole subtree needs
+  function span(k){const c=kids[k]||[];if(!c.length)return 1;
+   const own=c.reduce((a,x)=>a+span(x),0);
+   return Math.max(1,Math.min(own,Math.max(MAXC,...c.map(span))));}
+  // place a subtree: node centred over its children, children wrapped MAXC per row
+  const x0=40+cols[id]*1200;
+  function place(k,left,depth){
+   const c=kids[k]||[];
+   if(!c.length){pos[k]={x:left,y:26+depth*(H+GY),w:W,h:H};return 1;}
+   let used=0,cx=left,rowN=0,rowTop=26+(depth+1)*(H+GY);
+   const perRow=Math.min(MAXC,c.length);
+   c.forEach((ch,i)=>{
+    const col=i%perRow, row=Math.floor(i/perRow);
+    pos[ch]={x:left+col*(W+GX),y:rowTop+row*(H+GY),w:W,h:H};
+    // grandchildren (if any) go directly beneath, same rule
+    const gc=kids[ch]||[];
+    if(gc.length)place(ch,left+col*(W+GX),depth+1);
+   });
+   used=perRow;
+   pos[k]={x:left+((used*(W+GX)-GX)-W)/2,y:26+depth*(H+GY),w:W,h:H};
+   return used;
+  }
+  // lay the root's children left-to-right, each getting a block as wide as it needs
+  const top=kids[root]||[];
+  let cursor=x0, widths=[];
+  top.forEach(k=>{
+   const c=kids[k]||[];
+   const w=Math.max(1,Math.min(MAXC,c.length||1));
+   place(k,cursor,1);
+   widths.push([cursor,w]);
+   cursor+=w*(W+GX)+28;                 // 28px gutter between sibling blocks
+  });
+  const spanTotal=cursor-28-x0;
+  pos[root]={x:x0+Math.max(0,(spanTotal-W)/2),y:26,w:W,h:H};
+ });
+ // proposed spawns waiting at the split gate: their own lane under the graph, never overlapping
+ const props=(LIVE&&CTL.pending)||[];
+ if(props.length){let my=0;Object.values(pos).forEach(p=>{if(!p.marker)my=Math.max(my,p.y+p.h);});
+  let px=40;props.forEach(p=>{pos['prop:'+p.rid]={x:px,y:my+54,w:W,h:H,proposed:p};px+=W+GX;});}
+ // group markers: a small anchor centred over the members of an aggregated fan-out, so the
+ // aggregated edge lands on the group rather than on the group's parent node.
+ (M.edges||[]).forEach(e=>{if(!e.group)return;
+  const ps=e.members.map(k=>pos[k]).filter(Boolean);if(!ps.length)return;
+  const lx=Math.min(...ps.map(p=>p.x)), rx=Math.max(...ps.map(p=>p.x+p.w));
+  const ty=Math.min(...ps.map(p=>p.y));
+  pos[e.to]={x:(lx+rx)/2-56,y:ty-26,w:112,h:16,marker:true};});
+ return pos;}
+function renderDAG(){const d=document.getElementById('dag');const pos=layout();let maxx=0,maxy=0;Object.values(pos).forEach(p=>{maxx=Math.max(maxx,p.x+p.w);maxy=Math.max(maxy,p.y+p.h)});
+ // Checkpoint box for the selected node. It used to sit to the RIGHT of the node, but the SVG
+ // was sized to the nodes only, so for a rightmost node the box ran off the canvas and was
+ // clipped. Put it on whichever side has room, and grow the canvas to contain it.
+ let cpG=null;
+ if(sel&&M.nodes[sel]&&pos[sel]&&CPHIDE!==sel){const cl=cpsForNode(sel);
+  if(cl.length){const p=pos[sel],w=236,rh=15,h=Math.min(cl.length,8)*rh+20+(cl.length>8?rh:0),gap=12;
+   const right=p.x+p.w+gap, left=p.x-w-gap;
+   // prefer the side away from the impact card (top-right), and never off-canvas
+   let x=(left>=10)?left:right, y=p.y;
+   if(x===right&&right+w>maxx+40&&left<10){x=p.x;y=p.y+p.h+gap;}   // no side room: go below
+   cpG={x,y,w,h,rh,cl};maxx=Math.max(maxx,x+w);maxy=Math.max(maxy,y+h);}}
+ const latest=M.sessIds[M.sessIds.length-1];const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+ let svg=`<svg width="${maxx+40}" height="${maxy+40}"><defs><marker id="m" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#555"/></marker><marker id="mb" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#1f6feb"/></marker><marker id="mr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#c0392b"/></marker></defs>`;
+ M.sessIds.forEach((id,i)=>{svg+=`<text x="${40+i*(190*3+80)}" y="18" font-size="11" font-weight="bold" fill="${id===latest?'#222':'#888'}">${M.S[id].tag}${id===latest?' (current)':' (earlier session)'}</text>`;});
+ const show={spawn:document.getElementById('tgSpawn').checked,data:document.getElementById('tgData').checked,conflict:document.getElementById('tgConf').checked};
+ M.edges.forEach(e=>{const a=pos[e.from],b=pos[e.to];if(!a||!b)return;if(!show[e.kind])return;
+  const touches=sel&&(e.from===sel||e.to===sel||(e.members&&e.members.includes(sel)));
+  const state=sel?(touches?' lit':' dim'):'';const x1=a.x+a.w/2,y1=a.y+a.h,x2=b.x+b.w/2,y2=b.y;const mk=e.kind==='data'?'mb':e.kind==='conflict'?'mr':'m';
+  const rows=Math.abs(Math.round((y2-y1)/98));
+  // an edge spanning more than one row would pass straight through the boxes between; bow it out
+  const bow=(e.kind!=='spawn'&&rows>1)?(90+rows*26):0;
+  const d=bow?`M${x1},${y1} C${x1+bow},${y1+20} ${x2+bow},${y2-20} ${x2},${y2}`
+             :`M${x1},${y1} C${x1},${(y1+y2)/2} ${x2},${(y1+y2)/2} ${x2},${y2}`;
+  svg+=`<path class="edge ${e.kind}${e.group?' group':''}${e.stale?' stale':''}${state}" d="${d}" marker-end="url(#${mk})"/>`;
+  if(e.label&&touches&&!e.group)svg+=`<text class="elbl ${e.kind} lit" x="${(x1+x2)/2+4}" y="${(y1+y2)/2}">${esc(e.label)}</text>`;});
+ const props=(LIVE&&CTL.pending)||[];
+ if(props.length){let ly=Infinity;props.forEach(p=>{const q=pos['prop:'+p.rid];if(q)ly=Math.min(ly,q.y);});
+  svg+=`<text x="40" y="${ly-10}" font-size="10" font-weight="bold" fill="#8a5a00" letter-spacing=".5">PROPOSED · AGENT PAUSED, WAITING FOR YOUR DECISION</text>`;
+  props.forEach(p=>{const q=pos['prop:'+p.rid],c=pos[mapCaller(p.caller)];if(!q)return;
+   if(c){const x1=c.x+c.w/2,y1=c.y+c.h,x2=q.x+q.w/2,y2=q.y;
+    svg+=`<path class="edge prop" d="M${x1},${y1} C${x1},${(y1+y2)/2} ${x2},${(y1+y2)/2} ${x2},${y2}" marker-end="url(#m)"/>`;}
+   svg+=`<g class="node prop" onclick="reopenSplit()"><rect x="${q.x}" y="${q.y}" width="${q.w}" height="${q.h}"/>`+
+    `<text class="t" x="${q.x+8}" y="${q.y+16}">${esc((p.description||'(unnamed)').slice(0,26))}</text>`+
+    `<text class="sub" x="${q.x+8}" y="${q.y+29}">proposed by ${esc(p.impact.parent_label.slice(0,22))}</text>`+
+    `<text class="met" x="${q.x+8}" y="${q.y+50}">${p.impact.files_in_scope.length} files in scope</text>`+
+    `<rect x="${q.x+q.w-78}" y="${q.y+q.h-17}" width="72" height="13" rx="3" style="fill:#d99a14;stroke:none"/>`+
+    `<text class="st" x="${q.x+q.w-74}" y="${q.y+q.h-7}">awaiting you</text></g>`;});}
+ M.edges.forEach(e=>{if(!e.group)return;const p=pos[e.to];if(!p)return;
+  const touches=sel&&(e.from===sel||(e.members&&e.members.includes(sel)));
+  svg+=`<g class="gmark${touches?' lit':''}"><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="8"/>`+
+       `<text x="${p.x+p.w/2}" y="${p.y+11}" text-anchor="middle">${esc('read by '+e.members.length)}</text></g>`;});
+ M.order.forEach(k=>{const n=M.nodes[k],p=pos[k];const old=n.session!==latest;const rel=!sel||k===sel||M.edges.some(e=>(e.from===sel&&e.to===k)||(e.to===sel&&e.from===k));
+  const cls='node'+(n.main?' main':'')+(old?' old':'')+(sel===k?' sel':'')+(rel?'':' faded');
+  const sEnded=M.S[n.session].ended;
+  const splitting=!n.main&&((LIVE&&CTL.pending)||[]).some(p=>mapCaller(p.caller)===k);
+  const status=n.main?'':(splitting?'splitting':(n.stop?'done':(sEnded?'cut off':'running')));
+  const stc=n.stop?'#2e8b57':(sEnded?'#b45309':'#1f6feb');
+  const title=n.main?'orchestrator · '+M.S[n.session].tag:((n.intent||'(no description)').slice(0,26));
+  const line2=n.main?`${n.events.filter(e=>kind(e)==='write').length} edits · ${n.writes.size} files · ${M.S[n.session].spawns} spawns`
+    :(n.type+' · '+k.slice(0,10));
+  const lk=n.likely?n.likely.size:0;
+  const wl=[...n.writes];
+  const line3=n.main?'':`${wl.length} wrote${lk?' (+'+lk+'?)':''}   ${n.reads.size} read`;
+  svg+=`<g class="${cls}" onclick="select('${k}')"><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}"/><text class="t" x="${p.x+8}" y="${p.y+16}">${esc(title)}</text>`+
+   `<text class="sub" x="${p.x+8}" y="${p.y+29}">${esc(line2)}</text>`+
+   (n.main?'':`<line x1="${p.x+8}" y1="${p.y+36}" x2="${p.x+p.w-8}" y2="${p.y+36}" stroke="#e8ebef"/>`)+
+   `<text class="met" x="${p.x+8}" y="${p.y+50}">${esc(line3)}</text>`;
+  if(status)svg+=`<rect x="${p.x+p.w-56}" y="${p.y+p.h-17}" width="50" height="13" rx="3" style="fill:${stc};stroke:none"/><text class="st" x="${p.x+p.w-51}" y="${p.y+p.h-7}">${status}${old?' · '+M.S[n.session].tag:''}</text>`;
+  svg+='</g>';});
+ // checkpoints for the selected node, beside its rectangle and clickable
+ if(cpG){const {x,y,w,h,rh,cl}=cpG;
+  svg+=`<g class="cpbox"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" style="fill:#fff;stroke:#cfcfcf;stroke-width:1"/>`;
+  svg+=`<rect x="${x}" y="${y}" width="4" height="${h}" style="fill:#0d9488"/>`;
+  svg+=`<text x="${x+11}" y="${y+13}" font-size="9.5" fill="#555" font-weight="bold" letter-spacing=".5">CHECKPOINTS (${cl.length})</text>`;
+  svg+=`<g style="cursor:pointer" onclick="CPHIDE=sel;renderDAG()"><title>close</title><rect x="${x+w-18}" y="${y+2}" width="16" height="14" style="fill:transparent"/><text x="${x+w-14}" y="${y+13}" font-size="13" fill="#777">&#215;</text></g>`;
+  svg+=`<line x1="${x+4}" y1="${y+18}" x2="${x+w}" y2="${y+18}" stroke="#e5e5e5"/>`;
+  cl.slice(0,8).forEach((o,i)=>{const ty=y+18+(i+1)*rh-3;
+   svg+=`<g style="cursor:pointer" onclick="cpJump('${o.c.cid}')">`+
+        `<rect x="${x+4}" y="${ty-11}" width="${w-4}" height="${rh}" style="fill:transparent"/>`+
+        `<text x="${x+11}" y="${ty}" font-size="9.5" fill="#0d9488" font-family="Menlo,monospace">${esc(o.c.cid)}</text>`+
+        `<text x="${x+46}" y="${ty}" font-size="9.5" fill="#222">${esc(o.c.path.split('/').slice(-1)[0].slice(0,26))}${o.c.via==='bash'?' <tspan fill="#999">bash</tspan>':''}</text></g>`;});
+  if(cl.length>8)svg+=`<text x="${x+11}" y="${y+18+9*rh-3}" font-size="9" fill="#888">+${cl.length-8} more in HISTORY</text>`;
+  svg+='</g>';}
+ svg+='</svg>';d.innerHTML=M.order.length?svg:'<div class="empty">no sessions yet. Run Claude Code in this folder, then refresh.</div>';}
+function impact(k){const n=M.nodes[k];if(!n||n.main)return'';
+ const down=M.order.filter(o=>o!==k&&[...M.nodes[o].reads].some(f=>n.writes.has(f)));
+ const earlier=M.order.filter(o=>o!==k&&M.nodes[o].session!==n.session&&[...M.nodes[o].writes].some(f=>n.writes.has(f)));
+ const th=down.length>=2||earlier.length>0;
+ const nm=o=>{const x=M.nodes[o];return x.main?'orchestrator':(x.intent||x.type||o.slice(0,10));};
+ const chip=(o,cls)=>`<button class="chip ${cls||''}" onclick="select('${o}')" title="${o}">${esc2(nm(o))}</button>`;
+ const files=[...n.writes];
+ // plain-language verdict first: that is the question an overseer is asking
+ let head, tone;
+ if(earlier.length){head=`Touches another session's files`;tone='hot';}
+ else if(down.length>=2){head=`${down.length} nodes depend on this`;tone='hot';}
+ else if(down.length===1){head=`1 node depends on this`;tone='warn';}
+ else {head=`Safe to re-run: nothing depends on it`;tone='ok';}
+ const shown=files.slice(0,6).map(f=>`<li>${esc2(f)}</li>`).join('');
+ const more=files.length>6?`<li class="more">+${files.length-6} more in HISTORY</li>`:'';
+ const p=M.nodes[n.parent];
+ return `<div class="card ${tone}">
+  <div class="ch">IMPACT IF RE-RUN OR EDITED</div>
+  <div class="cv"><span class="cdot"></span>${esc2(head)}</div>
+  <div class="cn">${esc2(nm(k))}</div>
+  <div class="crow"><span class="cl">USED BY</span><span class="cvv">${down.length?down.map(o=>chip(o,'use')).join(''):'<span class="none">no other node read its files</span>'}</span></div>
+  <div class="crow"><span class="cl">SPAWNED BY</span><span class="cvv">${p?chip(n.parent,'par'):'<span class="none">unknown</span>'}</span></div>
+  ${earlier.length?`<div class="crow"><span class="cl">OTHER SESSION</span><span class="cvv">${earlier.map(o=>chip(o,'use')).join('')}</span></div>`:''}
+  <details class="cfiles"><summary>WROTE ${files.length} FILE${files.length===1?'':'S'}</summary><ul>${shown}${more}</ul></details>
+  ${LIVE?`<div class="cact">${nodeStatus(n)==='running'?`<button class="btn" onclick="openTell('${k}')">Send instruction</button>`:''}
+   <button class="btn" onclick="openEdit('${k}')">Edit brief &amp; rerun</button>
+   <button class="btn danger" onclick="openReset('node:${k}')">Reset to before this node</button></div>`:''}
+ </div>`;}
+function esc2(x){return String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function spawnerLabel(n){const p=M.nodes[n.parent];
+ if(!p)return 'unknown';
+ if(p.main)return 'orchestrator';
+ return (p.intent||p.type)+' ('+p.id.slice(0,10)+')';}
+function cpJump(cid){
+ for(const e of allEvs()){
+  const ids=[e.ov_checkpoint].concat(e.ov_checkpoint_bash||[]);
+  if(ids.includes(cid)){const k=e.__node||('main:'+e.session_id);select(k,e);
+   const r=document.querySelector('#events .row.sel');if(r)dScrollTo(r);return;}
+ }}
+
+function select(k,ev){sel=k;SELEV=ev||null;SELTOK++;CARDOFF=false;CPHIDE=null;renderDAG();renderCps();if(!CARD)drawCard(nodeCard(k));
+ openD(k,ev||null,null);}
+// one history row; shared by the node-filtered view and "show all"
+function histRow(e,t0,ev,prefix){const i=e.tool_input||{};const what=e.ov_event==='prompt'?'human: '+(e.prompt||'').slice(0,120):(e.tool_name||e.ov_event)+' '+(fp(e)||(i.command||'').slice(0,90)||(i.prompt||'').slice(0,90));
+  const row=document.createElement('div');row.className='row'+(ev===e?' sel':'');row.style.borderLeft='3px solid '+COLORS[kind(e)];
+  const label=e.ov_event==='intervention'?`human ${e.decision}: ${e.kind} ${e.child||e.node_label||e.target||''}`
+    :e.ov_event==='instruction_delivered'?'instruction delivered to this agent'
+    :e.ov_event==='split_proposed'?`split proposed: ${e.description||''}${e.gated?' (paused for review)':''}`:what;
+  const cps=[e.ov_checkpoint].concat(e.ov_checkpoint_bash||[]).filter(Boolean);
+  const ws=wIds(e);
+  row.textContent=`t+${Math.round((e.ov_ts-t0)/1000)}s  ${prefix||''}${label}${cps.length?'  ['+cps.join(', ')+']':''}${ws.length?'  [workspace '+ws.join(' \u2192 ')+']':''}`;
+  if(LIVE){
+   if(cps.length){const b=document.createElement('button');b.className='rbtn';b.textContent='reset here';b.onclick=x=>{x.stopPropagation();openReset(cps[0]);};row.appendChild(b);}
+   else if(ws.length){const b=document.createElement('button');b.className='rbtn';b.textContent='reset to '+ws[0];b.title='workspace as it was just before this decision';b.onclick=x=>{x.stopPropagation();openReset(ws[0]);};row.appendChild(b);}
+   if(e.ov_event==='pre_tool'&&(e.tool_name==='Agent'||e.tool_name==='Task')){
+    const kid=Object.keys(M.nodes).find(q=>M.nodes[q].spawnTs===e.ov_ts);
+    if(kid){const b=document.createElement('button');b.className='rbtn';b.textContent='edit & rerun';b.onclick=x=>{x.stopPropagation();openEdit(kid);};row.appendChild(b);}}}
+    return row;}
+function renderHistory(k,ev){const n=M.nodes[k];if(!n)return;
+ document.getElementById('dtitle').innerHTML='&nbsp;&nbsp;HISTORY · '+esc2(n.main?'orchestrator '+M.S[n.session].tag:(n.intent||n.type)+' · '+k.slice(0,10))+(n.summary?' · final: '+esc2(n.summary.replace(/\s+/g,' ').slice(0,120)):'');
+ const d=document.getElementById('events');d.innerHTML='';const t0=M.S[n.session].first;
+ if(n.prompt){const pr=document.createElement('div');pr.className='row';pr.style.whiteSpace='normal';pr.style.color='#1f6feb';
+  pr.textContent='spawn prompt: '+n.prompt;pr.classList.add('clamp');pr.title='click to expand';
+  pr.onclick=()=>pr.classList.toggle('clamp');
+  if(LIVE){const b=document.createElement('button');b.className='rbtn';b.textContent='edit & rerun';b.onclick=()=>openEdit(k);pr.appendChild(b);}
+  d.appendChild(pr);}
+ const list=n.events.slice();if(ev&&!list.includes(ev)){list.push(ev);list.sort((a,b)=>a.ov_ts-b.ov_ts);}
+ list.forEach(e=>d.appendChild(histRow(e,t0,ev)));
+ const r=d.querySelector('.row.sel');   // land on the event that opened D, scrolling D only
+ if(r)dScrollTo(r);}
+function dScrollTo(r){requestAnimationFrame(()=>{const P=document.getElementById('D');
+ P.scrollTop=Math.max(0,r.offsetTop-P.clientHeight/2+r.offsetHeight/2);});}
+function renderAllHistory(){const d=document.getElementById('events');d.innerHTML='';
+ const s=M.sessIds[M.sessIds.length-1],t0=M.S[s].first;
+ document.getElementById('dtitle').innerHTML='&nbsp;&nbsp;HISTORY · all events · '+M.S[s].tag;
+ const owner={};Object.values(M.nodes).forEach(n=>n.events.forEach(e=>owner[e.ov_ts+'|'+(e.ov_event||'')+'|'+(e.tool_name||'')]=n));
+ M.S[s].events.forEach(e=>{const n=owner[e.ov_ts+'|'+(e.ov_event||'')+'|'+(e.tool_name||'')];
+  d.appendChild(histRow(e,t0,null,n?'['+(n.main?'orchestrator':(n.intent||'').slice(0,18))+'] ':''));});}
+// D is hidden until there is a reason to read it: a node or event the human clicks, or an impact
+// notice / split recommendations the tool surfaces. It opens filtered to that node, at that event.
+function openD(k,ev,why){DSTATE={open:true,filter:k,why:why};document.getElementById('wrap').classList.remove('dclosed');
+ renderHistory(k,ev);document.getElementById('dwhy').innerHTML=why?`<span class="dwhy">opened by ${esc2(why)}</span>`:'';}
+function closeD(){DSTATE={open:false,filter:null,why:null};document.getElementById('wrap').classList.add('dclosed');}
+// the event that created a node's impact: its last write of a file a downstream node consumed
+function causalEvent(k,im){const n=M.nodes[k];if(!n)return null;
+ const fs=new Set();(im.downstream||[]).filter(d=>d.depth===1).forEach(d=>(d.files||[]).forEach(f=>fs.add(f)));
+ let hit=null;n.events.forEach(e=>{const w=[].concat(e.ov_bash_writes||[]);const f=fp(e);if(f)w.push(f);
+  if(w.some(x=>fs.has(x)))hit=e;});return hit;}
+// ================= live control: split gate, previews, the three interventions =================
+const LIVE=!window.__EVENTS__;          // a static snapshot has no server behind it
+let CTL={run:null,gate:'off',recommend:'off',pending:[]},CARD=null,LASTSIG='',CTLCPS=[],SEENSPLIT=null;
+let SELTOK=0,GRAPH=null,IMPACT={},DSTATE={open:false,filter:null,why:null},SELEV=null,AUTOD={};
+async function jget(u){const r=await fetch(u);return r.json();}
+async function jpost(u,b){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+ const j=await r.json();if(!r.ok||j.error)throw new Error(j.error||('HTTP '+r.status));return j;}
+function mapCaller(c){return c&&c.startsWith('main:')?'main:launch-'+c.slice(5):c;}
+function nodeStatus(n){const e=M.S[n.session].ended;return n.main?(e?'ended':'running'):(n.stop?'done':(e?'cut off':'running'));}
+async function fetchImpact(k){try{const im=await jget('/control/impact?node='+encodeURIComponent(k));if(im.error)return;
+ const prev=JSON.stringify(IMPACT[k]);IMPACT[k]=im;
+ if(sel===k&&!CARD&&!CARDOFF&&JSON.stringify(im)!==prev)drawCard(impactLive(k,im));
+ // above threshold: the impact notice fires, so D opens on the event that caused it; once per
+ // click, so a background refresh never reopens D after the human closed it
+ if(sel===k&&im.threshold&&!SELEV&&AUTOD['n:'+k]!==SELTOK){AUTOD['n:'+k]=SELTOK;
+  openD(k,causalEvent(k,im),`impact notice: ${im.downstream.length} nodes depend on this`);}}catch(e){}}
+function downList(ds){return ds.length?`<ul class="dlist">${ds.map(d=>`<li class="${d.depth>1?'d2':''}">`+
+ `<button class="chip use" onclick="select('${mapCaller(d.key)}')">${esc2(d.label.split(' (')[0])}</button>`+
+ `${d.stale&&d.stale.length?' <b style="color:#b45309;font-size:9.5px">input changed since read</b>':''}`+
+ `<span class="why">${d.depth>1?'&#8627; ':''}${esc2(d.reason||'')}</span></li>`).join('')}</ul>`
+ :'<span class="none">no other node consumed its output</span>';}
+function toneFor(down,cross){return (cross&&cross.length)||down.length>=2?'hot':down.length===1?'warn':'ok';}
+function impactLive(k,im){const n=M.nodes[k];const down=im.downstream||[],cross=im.cross_session||[];
+ const tone=toneFor(down,cross);
+ const head=cross.length?`Touches another session's files`:down.length>=2?`${down.length} nodes depend on this`
+   :down.length===1?`1 node depends on this`:`Safe to re-run: nothing depends on it`;
+ const files=im.files_written||[],p=M.nodes[n.parent];
+ const shown=files.slice(0,6).map(f=>`<li>${esc2(f)}</li>`).join('')+(files.length>6?`<li class="more">+${files.length-6} more in HISTORY</li>`:'');
+ const inferred=down.some(d=>d.exact===false);
+ return `<div class="card ${tone}"><div class="ch">IMPACT IF RE-RUN OR EDITED</div>
+  <div class="cv"><span class="cdot"></span>${esc2(head)}</div><div class="cn">${esc2(n.intent||k)}</div>
+  ${crow('AFFECTS',downList(down))}
+  ${(im.stale_inputs||[]).length?crow('STALE INPUTS',im.stale_inputs.map(x=>esc2(x.files.map(f=>f.split('/').pop()).join(', '))+' from '+esc2(x.src.split(' (')[0])).join('<br>')):''}
+  ${cross.length?crow('OTHER SESSION',cross.map(x=>`<button class="chip use" onclick="select('${mapCaller(x.key)}')">${esc2(x.label)}</button>`).join(' ')):''}
+  ${crow('SPAWNED BY',p?`<button class="chip par" onclick="select('${n.parent}')">${esc2(p.main?'orchestrator':(p.intent||p.type))}</button>`:'<span class="none">unknown</span>')}
+  ${inferred?'<div class="gmeta" style="padding:4px 8px 0">Some dependencies are inferred from timing: this log predates version capture.</div>':''}
+  <details class="cfiles"><summary>WROTE ${files.length} FILE${files.length===1?'':'S'}</summary><ul>${shown}</ul></details>
+  <div class="cact">${nodeStatus(n)==='running'?`<button class="btn" onclick="openTell('${k}')">Send instruction</button>`:''}
+   <button class="btn" onclick="openEdit('${k}')">Edit brief &amp; rerun</button>
+   <button class="btn danger" onclick="openReset('node:${k}')">Reset to before this node</button></div></div>`;}
+function drawCard(h){const c=document.getElementById('card');c.innerHTML=h;
+ const hd=c.querySelector('.card>.ch');if(hd&&!hd.querySelector('.cx'))hd.insertAdjacentHTML('beforeend','<button class="cx" title="close" onclick="closeCard()">&#215;</button>');}
+let CARDOFF=false,SPLITHIDE=null,CPHIDE=null;
+async function closeCard(){const c=CARD;
+ if(c&&c.type==='split')SPLITHIDE=CTL.pending.map(p=>p.rid).join(',');   // the agent stays paused; the banner can reopen it
+ if(c&&c.type==='notice'){const sp=(M.evs||[]).filter(e=>e.ov_event==='split_proposed');if(sp.length)SEENSPLIT=sp[sp.length-1].ov_ts;}
+ if(c&&c.type==='preview'){try{await jpost('/control/cancel',{kind:c.kind,target:c.target||c.node});}catch(e){}}
+ CARD=null;CARDOFF=true;drawCard('');renderBanner();}
+function reopenSplit(){SPLITHIDE=null;CARDOFF=false;showSplitCard();renderBanner();}
+function nodeCard(k){const n=M.nodes[k];if(!n)return'';
+ if(!n.main){if(!LIVE)return impact(k);fetchImpact(k);return IMPACT[k]?impactLive(k,IMPACT[k]):impact(k);}
+ if(!LIVE)return'';
+ return `<div class="card ok"><div class="ch">ORCHESTRATOR · ${M.S[n.session].tag}</div>
+  <div class="cn" style="padding:7px 8px">${nodeStatus(n)==='running'?'Running. You can send it an instruction; it arrives on its next tool call.':'This session has ended.'}</div>
+  ${nodeStatus(n)==='running'?`<div class="cact"><button class="btn" onclick="openTell('orchestrator')">Send instruction</button></div>`:''}</div>`;}
+function restoreCard(){if(CARDOFF){drawCard('');return;}drawCard(sel&&M.nodes[sel]?nodeCard(sel):'');}
+function lst(xs,n){xs=xs||[];n=n||4;return xs.length?esc2(xs.slice(0,n).join(', '))+(xs.length>n?` +${xs.length-n} more`:''):'<span class="none">none</span>';}
+function crow(l,v){return `<div class="crow"><span class="cl">${l}</span><span class="cvv" style="display:block">${v}</span></div>`;}
+
+async function pollStatus(){
+ if(!LIVE)return;
+ try{CTL=await jget('/control/status');}catch(e){return;}
+ renderHeader();
+ const sig=CTL.pending.map(p=>p.rid).join(',');const changed=sig!==LASTSIG;LASTSIG=sig;
+ if(CTL.run.active||changed)await refreshEvents();
+ if(CTL.pending.length){if(SPLITHIDE===sig){}else if(!CARD||(CARD.type==='split'&&changed)){SPLITHIDE=null;CARDOFF=false;await showSplitCard();}else tickWait();}
+ else{SPLITHIDE=null;if(CARD&&CARD.type==='split'){CARD=null;restoreCard();}}
+ renderBanner();}
+async function refreshEvents(){
+ try{const [evs,g]=await Promise.all([jget('/events'),jget('/control/graph').catch(()=>null)]);GRAPH=Array.isArray(g)?g:null;M=build(evs);
+  document.getElementById('cnt').textContent=evs.length+' events · '+M.sessIds.length+' sessions';
+  M.evs=evs;if(sel&&!M.nodes[sel])sel=null;renderSessions();renderDAG();
+  if(!CARD)restoreCard();checkSplitNotice();}catch(e){}}
+function renderHeader(){const r=CTL.run||{};const p=document.getElementById('runpill');p.hidden=false;
+ document.getElementById('gtogwrap').hidden=false;
+ document.getElementById('livehint').textContent=r.active?'live: updates as agents run':'refresh the page to re-read events.jsonl';
+ if(CTL.pending.length){p.className='pill pause';p.textContent='PAUSED · '+CTL.pending.length+' split'+(CTL.pending.length>1?'s':'')+' waiting';}
+ else if(r.active){p.className='pill run';p.textContent='RUNNING';}
+ else{p.className='pill end';p.textContent='NOT RUNNING';}
+ const t=document.getElementById('gateTog');if(document.activeElement!==t)t.checked=CTL.gate==='on';
+ document.getElementById('rtogwrap').hidden=false;
+ const rt=document.getElementById('recTog');if(document.activeElement!==rt)rt.checked=CTL.recommend==='on';}
+function renderBanner(){const b=document.getElementById('gbanner');
+ if(!CTL.pending.length){b.hidden=true;return;}
+ const g=splitGroups();b.hidden=false;
+ b.textContent=`Agent paused: ${CTL.pending.length} proposed subagent${CTL.pending.length>1?'s':''} from ${g.map(x=>x[0].impact.parent_label).join(', ')} waiting for your decision`+(CARD&&CARD.type==='split'?' (right).':'.');
+ if(!(CARD&&CARD.type==='split'))b.insertAdjacentHTML('beforeend','<button class="gshow" onclick="reopenSplit()">show decision card</button>');}
+function splitGroups(){const g={};CTL.pending.forEach(p=>{(g[p.caller]=g[p.caller]||[]).push(p);});return Object.values(g);}
+function tickWait(){const w=document.getElementById('gwait');if(!w||!CTL.pending.length)return;
+ w.textContent=Math.round((Date.now()-Math.min(...CTL.pending.map(p=>p.ts)))/1000)+'s';}
+
+function impactRows(im,scope){
+ const so=im.split_so_far||[];
+ return `${im.stated_plan?crow("PARENT'S PLAN",`<span style="white-space:pre-wrap">${esc2(im.stated_plan.slice(0,400))}</span>`):''}
+  ${crow('SPLIT SO FAR',so.length?so.map(x=>`<button class="chip" onclick="select('${x.key}')">${esc2(x.label.split(' (')[0])} · ${esc2(x.status)}</button>`).join(' ')
+     +'<div class="gmeta" style="padding:3px 0 0">children arrive one per message, so the rest may not exist yet</div>':'<span class="none">this is the first child</span>')}
+  ${crow('FILES IN SCOPE',lst(scope,5))}
+  ${crow('DOWNSTREAM',downList(im.downstream||[]))}
+  ${crow('OTHER SESSIONS',lst(im.cross_session.map(x=>x.label)))}
+  ${crow('PARENT OUTPUT',im.parent_output_count+' files so far')}
+  ${CTL.recommend!=='on'?'':(im.is_split===false
+     ?'<div class="gmeta" style="padding:4px 8px">Single spawn: pros and cons apply once the parent divides its work across several agents.</div>'
+     :`<div class="pc"><div><b>PROS</b>${rl(im.pros)}</div><div><b>CONS</b>${rl(im.cons)}</div></div>`)}`;}
+function rl(xs){return xs&&xs.length?`<ul class="rlist">${xs.map(x=>`<li>${esc2(x)}</li>`).join('')}</ul>`:'<i>none identified</i>';}
+function splitEvent(p){const c=allEvs().filter(e=>e.ov_event==='split_proposed'&&e.description===p.description&&e.caller===p.caller);return c[c.length-1]||null;}
+// D opens by itself when a split crosses the threshold or carries recommendations, on that split
+function autoOpenD(key,p,im){if(AUTOD[key])return;
+ const recs=CTL.recommend==='on'&&im.is_split!==false;if(!im.threshold&&!recs)return;
+ const pk=mapCaller(p.caller);if(!M.nodes[pk])return;AUTOD[key]=1;
+ openD(pk,splitEvent(p),im.threshold?`impact notice: split affects ${(im.downstream||[]).length} nodes`:'split recommendations');}
+// Impact is always surfaced: with the gate off, each new split still gets a card, but a
+// non-blocking one, since the spawn has already gone ahead.
+function checkSplitNotice(){
+ if(!LIVE||CTL.gate==='on'||CTL.pending.length)return;
+ const sp=(M.evs||[]).filter(e=>e.ov_event==='split_proposed');if(!sp.length)return;
+ const last=sp[sp.length-1];
+ if(SEENSPLIT===null){SEENSPLIT=last.ov_ts;return;}      // do not replay history on page load
+ if(last.ov_ts<=SEENSPLIT)return;
+ if(CARD&&CARD.type!=='notice')return;
+ const fresh=sp.filter(e=>e.ov_ts>SEENSPLIT);
+ CARD={type:'notice'};CARDOFF=false;const im=last.impact||{};
+ drawCard(`<div class="card ${toneFor(im.downstream||[],im.cross_session||[])} gcard"><div class="ch">SPLIT · NOT PAUSED (GATE OFF)</div>
+  <div class="cv"><span class="cdot"></span>Forward impact of: split ${esc2(im.parent_label||'')} → ${esc2(last.description||'')}</div>
+  ${impactRows(im,im.files_in_scope||[])}
+  <div class="gbtns"><button class="btn" onclick="SEENSPLIT=${last.ov_ts};CARD=null;restoreCard()">Dismiss</button>
+   <button class="btn" onclick="SEENSPLIT=${last.ov_ts};setGate('on')">Pause future splits</button></div>
+  <div class="gmeta">${fresh.length>1?fresh.length+' splits since you last looked; showing the latest · ':''}this spawn already started</div></div>`);
+ autoOpenD('e:'+last.ov_ts,{description:last.description,caller:last.caller},im);}
+async function setGate(state){try{await jpost('/control/gate',{state});}catch(e){}CARD=null;restoreCard();pollStatus();}
+async function showSplitCard(){
+ const groups=splitGroups();if(!groups.length)return;const grp=groups[0];
+ try{CTLCPS=await jget('/control/checkpoints');}catch(e){CTLCPS=[];}
+ CARD={type:'split',caller:grp[0].caller,rids:grp.map(p=>p.rid)};
+ const im=grp[0].impact,kids=grp.map(p=>p.description||'(unnamed)');
+ const scope=[...new Set(grp.flatMap(p=>p.impact.files_in_scope))];
+ const opts=CTLCPS.slice(-15).reverse().map(c=>`<option value="${c.id}">${c.id} · ${esc2((c.file||c.label||'').split('/').pop().slice(0,28))}</option>`).join('');
+ const briefs=grp.map(p=>`<div style="padding:3px 8px 0;font-weight:bold;font-size:10px">${esc2(p.description||'(unnamed)')}</div><div class="brief">${esc2(p.prompt||'')}</div>`).join('');
+ drawCard(`<div class="card ${toneFor(im.downstream||[],im.cross_session||[])} gcard">
+  <div class="ch">SPLIT PROPOSED · AGENT PAUSED</div>
+  <div class="cv"><span class="cdot"></span>Forward impact of: split ${esc2(im.parent_label)} → ${esc2(kids.join(', '))}</div>
+  ${impactRows(im,scope)}
+  <details class="cfiles"><summary>PROPOSED BRIEF${grp.length>1?'S ('+grp.length+')':''}</summary>${briefs}</details>
+  <textarea id="gnote" placeholder="Note to the agent. Required for Modify; optional for Reject."></textarea>
+  <div class="gbtns">
+   <button class="btn pri" onclick="gdo('accept')">Accept</button>
+   <button class="btn" onclick="gdo('accept_all')" title="Also accept every further spawn from this parent until it finishes">Accept all from this parent</button>
+   <button class="btn" onclick="gdo('modify')">Modify</button>
+   <button class="btn" onclick="gdo('reject')">Reject</button>
+   <button class="btn danger" onclick="gdo('reset')">Reset to</button><select id="gcp" aria-label="checkpoint to reset to">${opts}</select>
+  </div>
+  <div id="gerr"></div>
+  <div class="gmeta">${grp.length} proposed spawn${grp.length>1?'s':''} from this parent · waiting <span id="gwait">0s</span> · the agent stays paused until you decide (not charged to its time)${groups.length>1?` · ${groups.length-1} more split${groups.length>2?'s':''} queued`:''}</div>
+ </div>`);tickWait();autoOpenD('r:'+grp[0].rid,grp[0],im);}
+async function gdo(decision){
+ const note=(document.getElementById('gnote').value||'').trim(),cp=(document.getElementById('gcp')||{}).value;
+ const err=document.getElementById('gerr');
+ if(decision==='modify'&&!note){err.innerHTML='<div class="perr">Write what should change in the note, then Modify.</div>';document.getElementById('gnote').focus();return;}
+ try{await jpost('/control/decide',{rids:CARD.rids,decision,note,reset_to:decision==='reset'?cp:null});
+  const words={accept:'Accepted. The agent is spawning it now.',accept_all:'Accepted, along with every further spawn from this parent until it finishes.',modify:'Sent back with your changes. The agent will re-plan.',
+   reject:'Rejected. The agent will continue without it.',reset:'Workspace reset to '+cp+'. The agent has been told.'};
+  drawCard(`<div class="card ok"><div class="ch">DECISION RECORDED</div><div class="cv"><span class="cdot"></span>${esc2(words[decision])}</div>
+   <div class="gmeta" style="padding:4px 8px 8px">Recorded as: who initiated = agent, decided by = human, decision = ${decision}.</div></div>`);
+  CARD={type:'done'};setTimeout(()=>{if(CARD&&CARD.type==='done'){CARD=null;restoreCard();}},2500);pollStatus();}
+ catch(e){err.innerHTML=`<div class="perr">${esc2(e.message)}</div>`;}}
+
+// ---- the three human-initiated interventions: preview first, apply on confirm ----
+function pcard(title,body,btns,tone){return `<div class="card ${tone||'warn'} pcard"><div class="ch">PREVIEW · ${title}</div>${body}
+ <div id="perr"></div><div class="gbtns">${btns}</div></div>`;}
+function fail(e){const d=document.getElementById('perr');if(d)d.innerHTML=`<div class="perr">${esc2(e.message)}</div>`;}
+async function openReset(target){CARD={type:'preview',kind:'reset',target};drawCard(pcard('RESET',`<div class="cn" style="padding:7px 8px">Computing what this undoes…</div>`,''));
+ try{const pv=await jpost('/control/preview',{kind:'reset',target});CARD.pv=pv;
+  const disc=pv.discards.map(d=>`<li>${esc2(d.node)}: ${esc2(d.files.slice(0,3).join(', '))}${d.n>3?' +'+(d.n-3):''}</li>`).join('');
+  const busy=pv.run.active&&!pv.run.paused;
+  drawCard(pcard('RESET TO '+esc2(target.replace('node:','before ').slice(0,30)),
+   `<div class="cv"><span class="cdot"></span>Reset to ${esc2(pv.to)}</div>
+    ${crow('DISCARDS',disc?`<ul class="flist">${disc}</ul>`:'<span class="none">nothing</span>')}
+    ${crow('BACK TO PENDING',lst(pv.nodes_back_to_pending))}
+    ${crow('FILES',`${pv.files_restored} restored · ${pv.files_deleted} deleted`)}
+    ${pv.unrestorable.length?crow('CANNOT RESTORE',lst(pv.unrestorable,3)):''}
+    ${crow('DOWNSTREAM',lst(pv.downstream)+(pv.threshold?' <b style="color:#c0392b">threshold crossed</b>':''))}
+    ${busy?'<div class="pwarn">A run is active. Resetting under a working agent corrupts its files; wait for it to end, or reset from a paused split.</div>':''}
+    <div class="gmeta" style="padding:4px 8px 0">Current files are backed up first, so this can be undone.</div>`,
+   `<button class="btn danger" ${busy?'disabled':''} onclick="confirmCard()">Confirm reset (forks a branch)</button><button class="btn" onclick="cancelCard()">Cancel</button>`,'hot'));}
+ catch(e){drawCard(pcard('RESET',`<div class="perr">${esc2(e.message)}</div>`,`<button class="btn" onclick="CARD=null;restoreCard()">Close</button>`));}}
+function openEdit(k){const n=M.nodes[k];if(!n)return;CARD={type:'form',kind:'edit',node:k};
+ drawCard(`<div class="card warn pcard"><div class="ch">EDIT BRIEF AND RERUN · ${esc2((n.intent||'').slice(0,30))}</div>
+  <div class="cn" style="padding:7px 8px 0">Edit what this node was told. Its output is reverted and it runs again with your brief.</div>
+  <textarea id="ebrief" class="big">${esc2(n.prompt||'')}</textarea>
+  <div id="perr"></div><div class="gbtns"><button class="btn pri" onclick="previewEdit()">Preview</button><button class="btn" onclick="CARD=null;restoreCard()">Cancel</button></div></div>`);}
+async function previewEdit(){const brief=document.getElementById('ebrief').value;
+ try{const pv=await jpost('/control/preview',{kind:'edit',node:CARD.node,brief});CARD={type:'preview',kind:'edit',node:CARD.node,brief,pv};
+  drawCard(pcard('RERUN '+esc2(pv.node_label.slice(0,28)),
+   `<div class="cv"><span class="cdot"></span>Rerun ${esc2(pv.node_label)} with your brief</div>
+    ${crow('DISCARDS',`${pv.discards_n} files: ${lst(pv.discards,3)}`)}
+    ${crow('DOWNSTREAM',lst(pv.downstream)+(pv.threshold?' <b style="color:#c0392b">threshold crossed</b>':''))}
+    ${crow('UNTOUCHED',lst(pv.untouched_siblings,3))}
+    ${crow('DELIVERED VIA',pv.route==='orchestrator'?'the running orchestrator re-spawns it':'a standalone rerun (script written)')}
+    ${pv.warnings.map(w=>`<div class="pwarn">${esc2(w)}</div>`).join('')}
+    ${pv.route!=='orchestrator'?`<label class="gmeta" style="display:block;padding:4px 8px 0"><input type="checkbox" id="elaunch"> start the rerun now (otherwise only the script is written)</label>`:''}`,
+   `<button class="btn pri" ${pv.status==='running'?'disabled':''} onclick="confirmCard()">Confirm</button><button class="btn" onclick="cancelCard()">Cancel</button>`));}
+ catch(e){fail(e);}}
+function openTell(k){const n=M.nodes[k];CARD={type:'form',kind:'instruction',node:k};
+ drawCard(`<div class="card warn pcard"><div class="ch">INSTRUCTION · ${esc2(k==='orchestrator'?'orchestrator':(n.intent||'').slice(0,30))}</div>
+  <div class="cn" style="padding:7px 8px 0">Only this agent receives it, on its next tool call. Instructions do not fork the session.</div>
+  <textarea id="ttext" placeholder="e.g. keep the existing config format; do not add a new key"></textarea>
+  <div id="perr"></div><div class="gbtns"><button class="btn pri" onclick="previewTell()">Preview</button><button class="btn" onclick="CARD=null;restoreCard()">Cancel</button></div></div>`);}
+async function previewTell(){const text=(document.getElementById('ttext').value||'').trim();
+ if(!text){fail(new Error('Write the instruction first.'));return;}
+ try{const pv=await jpost('/control/preview',{kind:'instruction',node:CARD.node,text});CARD={type:'preview',kind:'instruction',node:CARD.node,text,pv};
+  drawCard(pcard('INSTRUCTION → '+esc2(pv.node_label.slice(0,26)),
+   `<div class="cv"><span class="cdot"></span>${esc2(pv.node_label)} (${esc2(pv.status)})</div>
+    <div class="brief">${esc2(text)}</div>
+    ${crow('FILES IN SCOPE',lst(pv.files_in_scope,4))}
+    ${crow('DOWNSTREAM',lst(pv.downstream))}
+    ${pv.warnings.map(w=>`<div class="pwarn">${esc2(w)}</div>`).join('')}`,
+   `<button class="btn pri" ${pv.deliverable?'':'disabled'} onclick="confirmCard()">Confirm</button><button class="btn" onclick="cancelCard()">Cancel</button>`,'ok'));}
+ catch(e){fail(e);}}
+async function confirmCard(){const c=CARD,body={kind:c.kind};
+ if(c.kind==='reset')body.target=c.target;
+ if(c.kind==='edit'){body.node=c.node;body.brief=c.brief;body.launch=!!(document.getElementById('elaunch')||{}).checked;}
+ if(c.kind==='instruction'){body.node=c.node;body.text=c.text;}
+ try{const r=await jpost('/control/apply',body);CARD={type:'done'};
+  const extra=r.backup?`<div class="gmeta" style="padding:0 8px 4px">Backup ${esc2(r.backup)}. Undo from a terminal: <code>python3 oversight/ctl.py undo ${esc2(r.backup)}</code></div>`:'';
+  const sc=r.rerun_script?`<div class="gmeta" style="padding:0 8px 4px">${r.launched?'Rerun started.':'Rerun not started. Script:'} <code>${esc2(r.rerun_script.split('/').slice(-3).join('/'))}</code></div>`:'';
+  drawCard(`<div class="card ok"><div class="ch">DONE · RECORDED</div>
+   <div class="cv"><span class="cdot"></span>${esc2({reset:'Workspace reset',edit_rerun:'Output reverted, rerun '+(r.route==='orchestrator'?'sent to the orchestrator':'prepared'),instruction:'Instruction queued'}[r.kind]||r.kind)}</div>
+   <div class="gmeta" style="padding:2px 8px 4px">who initiated = human · kind = ${esc2(r.kind)} · decision = confirm · checkpoint ${esc2(r.checkpoint_before||'')} → ${esc2(r.checkpoint_after||'')}${r.branch?' · branch '+esc2(r.branch):''}</div>
+   ${extra}${sc}<div class="gbtns"><button class="btn" onclick="CARD=null;restoreCard()">Close</button></div></div>`);
+  await refreshEvents();}
+ catch(e){fail(e);}}
+async function cancelCard(){const c=CARD;if(c&&c.type==='preview'){try{await jpost('/control/cancel',{kind:c.kind,target:c.target||c.node});}catch(e){}}
+ CARD=null;restoreCard();}
+if(LIVE){document.getElementById('gateTog').onchange=async ev=>{try{await jpost('/control/gate',{state:ev.target.checked?'on':'off'});}catch(e){}pollStatus();};
+ document.getElementById('recTog').onchange=async ev=>{try{await jpost('/control/recommend',{state:ev.target.checked?'on':'off'});}catch(e){}
+  await pollStatus();if(CARD&&CARD.type==='split')showSplitCard();};
+ setInterval(pollStatus,1500);setTimeout(pollStatus,300);}
+
+function wireD(){document.getElementById('dClose').onclick=closeD;
+ document.getElementById('dAll').onclick=()=>{document.getElementById('wrap').classList.remove('dclosed');DSTATE={open:true,filter:null,why:null};
+  document.getElementById('dwhy').innerHTML='';renderAllHistory();};
+ document.getElementById('dOpen').onclick=()=>{if(sel&&M.nodes[sel])openD(sel,null,null);else document.getElementById('dAll').onclick();};}
+function wireToggles(){['tgSpawn','tgData','tgConf'].forEach(id=>{const el=document.getElementById(id);if(el)el.onchange=renderDAG;});}
+function boot(evs){M=build(evs);document.getElementById('cnt').textContent=evs.length+' events · '+M.sessIds.length+' sessions';document.getElementById('task').textContent=location.hostname;renderSessions();wireToggles();wireD();renderDAG();renderCps();}
+if(window.__EVENTS__){CPS=parseCps(window.__CHECKPOINTS__);boot(window.__EVENTS__);}
+else{Promise.all([fetch('/events').then(r=>r.json()),fetch('/control/graph').then(r=>r.json()).catch(()=>null)]).then(([evs,g])=>{GRAPH=Array.isArray(g)?g:null;boot(evs);
+  M.evs=evs;fetch('/checkpoints').then(r=>r.json()).then(j=>{CPS=parseCps(j.checkpoints);renderCps();}).catch(()=>renderCps());});}
+</script></body></html>

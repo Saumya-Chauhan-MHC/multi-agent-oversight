@@ -1,0 +1,12 @@
+# args ||| stdin      (\n = newline in stdin)
+ ||| {"a":{"b":[1,2]},"c":"x"}
+ ||| {"b":1,"a":2,"my key":true}
+# --no-sort omitted: its key order is nondeterministic in the real gron (Go map iteration), so it cannot be graded byte-for-byte; ProgramBench drops such tests via tests.json
+-v ||| {"a":{"b":[1,null]},"c":"x"}
+-u ||| json = {};\njson.a = [];\njson.a[0] = 1;\njson.c = "x";
+-s ||| {"a":1}\n{"b":2}
+-j ||| {"a":[1,{"b":2}]}
+ ||| {"a":
+ nosuchfile.json |||
+--bogus ||| {}
+--version |||

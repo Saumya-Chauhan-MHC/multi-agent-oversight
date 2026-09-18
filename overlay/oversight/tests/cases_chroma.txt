@@ -1,0 +1,12 @@
+# args ||| stdin      (\n = newline in stdin).  Run: python3 oversight/tests/run_diff.py
+# The reference is chroma (syntax highlighter). -l picks the lexer, -f the formatter, -s the style.
+--list |||
+--version |||
+-l go -f json ||| package main\n\nfunc main() {}\n
+-l python -f tokens ||| def f(x):\n    return x + 1\n
+-l json -f noop ||| {"a": 1, "b": [true, null]}
+-l go -f html --html-only ||| var x = 1
+--html-styles -s monokai |||
+-l bash -f terminal256 ||| echo "hi $USER"
+-l nosuchlexer ||| x
+--fail --filename data.unknownext ||| hello

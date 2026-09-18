@@ -1,0 +1,6 @@
+task/
+task_*/
+run/
+__pycache__/
+*.pyc
+.DS_Store
