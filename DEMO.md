@@ -125,11 +125,16 @@ python3 oversight/ctl.py watch        # notices appear here, you answer 1 / 2 / 
 
 ## The viewer
 
-Open it in a second window during the run:
+Start the server, but do not open the page: the graph is not a second screen to watch. It opens
+itself, focused on the node in question, only when a spawn is **held** on a high-confidence
+departure. A check carries the link without opening anything, and a fit shows neither.
 
 ```bash
-cd $WORK && python3 oversight/viewer/serve.py     # http://localhost:4173
+cd $WORK && python3 oversight/viewer/serve.py &   # runs behind the scenes on 4173
 ```
+
+Set `open_dag_on_hold: false` in `oversight/memory/settings.json` if you would rather it never
+opened by itself.
 
 It shows the work graph with a mark on every node (green tick = fits, red ! = departs from a line
 you wrote, blue ? = a guess nothing you said covered), dimmed for what you have already seen and
