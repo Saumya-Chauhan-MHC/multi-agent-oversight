@@ -3,11 +3,14 @@
 `PROMPT.md` is the instruction used for the run reported in [docs/CALIBRATION.md](../../docs/CALIBRATION.md).
 It is the SWE Marathon `slack-clone` task: build a Slack style chat system at `/app` with three HTTP
 nodes, an IRC gateway, a Redis pub/sub daemon and a browser UI, started by one `start.sh` that stays
-in the foreground. Two lines were added at the top of the file for a local run: `/app` means the task
-directory, and there is no Redis on the machine.
+in the foreground. Three lines were added at the top of the file for a local run: `/app` means the task directory,
+there is no Redis on the machine, and independent parts should be built by separate subagents in
+parallel. The third line is the operator asking for fan-out. Without it this agent tends to build
+most of the system itself, which leaves the tool with little to judge.
 
-The task says nothing about subagents. How the work is divided is the agent's decision, which is the
-decision this tool is about.
+How the work is divided is still the agent's decision: the added line asks for parallel work where
+it fits, and says nothing about which components, which files, or who owns what. Those are the
+choices the tool judges.
 
 To run it:
 
