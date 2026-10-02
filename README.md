@@ -1,126 +1,105 @@
 # multi-agent-oversight
 
-An open-source tool for **watching and steering multi-agent Claude Code runs as they happen**.
-It records every step an agent and its subagents take, draws the work as a live DAG, tells you
-what a change to one node would affect downstream, and lets a human pause, accept, modify,
-reject, reset, or rerun parts of the work, from a browser or a terminal.
+A tool for keeping a human in the loop while Claude Code runs subagents. It reads five rules you
+write at the start, judges every delegation and every subagent action against them, and stops the
+work only when it is confident one of your rules is being broken. The rest of the time it stays
+quiet and counts what you have not seen.
 
-![The oversight viewer during a live run](docs/viewer.png)
+![The graph after a run](docs/images/graph_run.png)
 
-*A live run: the overview strip (left, one rectangle per event, with checkpoint ids), the work DAG
-(orchestrator plus each spawned subagent, with data and conflict edges), a selected node's
-checkpoints, and its impact card.*
+*After a run: the orchestrator and the subagent it spawned, the rules in your own words, nothing
+waiting for you.*
 
-> Research prototype. It is used in an HCI study on human oversight of coding agents. The tested
-> setup is a ProgramBench task run in Claude Code on macOS (details below).
+> Research prototype, used in a study on human oversight of coding agents. Tested on macOS with
+> Claude Code 2.1.287, on SWE Marathon and ProgramBench tasks.
 
-## Docs
+## The two components
 
-- [docs/DESIGN.md](docs/DESIGN.md) how the two components are triggered, what the terminal shows, what the graph shows, and how to run it on a SWE Marathon task
-- [docs/CALIBRATION.md](docs/CALIBRATION.md) every decision from one live run, which calls were right, what we changed, and the re-test
+**Alignment flags.** Two hooks fire on their own: one before a subagent is spawned, one before a
+subagent runs a command. A keyword filter drops anything your rules do not mention, at no cost. What
+is left goes to a judge with your rules, the brief or command, the child's own brief, and the state
+of the parent. The judge returns a verdict, a confidence, and evidence that quotes your rule against
+the text that conflicts with it. At 0.85 and above the work pauses and you answer. Between 0.50 and
+0.65, or when no rule covers the case, you get one line and nothing pauses. Below that, nothing is
+shown.
 
-## What it does
+**Catch-up.** A count of what you have not seen: departures that were never shown, checks you did not
+answer, repeats of a decision you declined at double weight, one point per ten files written in nodes
+you have not opened, and subagents that finished while you were away. When it passes your threshold
+you get one line at the next seam in the work. Nothing is paused. Any look resets it.
 
-- **Recorder.** Claude Code hooks append every event to `oversight/events.jsonl`: prompts, each
-  tool call with timing, subagent start and stop, the full brief each subagent was spawned with,
-  files read and written (including files a Bash command reads or writes), and content hashes of
-  every version read and produced.
-- **Work DAG.** One node for the orchestrator and one per spawned subagent. Edges: spawned by;
-  *reads another node's file* (Y read the exact version X wrote); *both wrote the same file*;
-  *input changed since it was read* (stale). It updates live as agents run.
-- **Impact notice.** For any node, a causal walk over those edges lists every node that consumed
-  its output, each with a one-line reason. The node turns red when **2 or more downstream nodes
-  read its files, or another session wrote the same file**; otherwise it is "safe to re-run".
-- **Checkpoints.**
-  - `cNNN` file checkpoints: before every file change (Write, Edit, or a Bash command that writes
-    a file) the file's current content is saved to a content-addressed store.
-  - `wNNN` workspace checkpoints: created at every human decision (before each split decision,
-    before and after every reset and every edit-and-rerun).
-  - Resetting to any checkpoint (or to `node:<name>`, or `t<seconds>`) restores the workspace
-    files byte-identically, and every reset can be undone.
-- **Split gate.** Optionally pauses every proposed subagent spawn until a human decides:
-  Accept, Accept all from this parent, Modify, Reject, or Reset. The card shows the impact of the
-  split, and optionally rule-based pros and cons.
-- **Interventions.** Reset to a checkpoint; edit a node's brief and rerun it; send an instruction
-  to one running agent. Each shows a preview first, and every decision is logged with its
-  before and after checkpoints (`oversight/control/interventions.jsonl`).
-- **Terminal version.** `oversight/ctl.py` does everything the viewer's buttons do.
+## What the terminal shows, and what the graph shows
 
-Not implemented yet: restoring an agent's conversation state at a checkpoint (only files are
-restored), model-based recommendations, and a generic installer for arbitrary projects.
+| | terminal | graph |
+|---|---|---|
+| a decision that fits | nothing | a mark on the node |
+| a check | one line, nothing paused | an item you can answer later |
+| a hold | the evidence, three choices, the agent waits | opens on that node |
+| catch-up | one line with the counts | the items behind those counts |
 
-## Quick start (ProgramBench task in Claude Code)
+The graph opens by itself only on a hold. Click a node to see what it owns, the decision that started
+it, and what it did that departed:
 
-Requirements: macOS or Linux, [Docker](https://www.docker.com/) running (Apple Silicon: enable
-Rosetta for amd64 emulation in Docker Desktop), [Claude Code](https://claude.com/claude-code),
-python3.
+![A node opened](docs/images/graph_node_open.png)
+
+## Quick start
 
 ```bash
-git clone https://github.com/Saumya-Chauhan-MHC/multi-agent-oversight.git
-cd multi-agent-oversight
-GATE=on CAP_MINUTES=45 ./setup.sh alecthomas__chroma.8d04def   # pulls the task image, builds ./task
+mkdir ~/task_run && cd ~/task_run
+cp -R <this repo>/overlay/.claude <this repo>/overlay/oversight .
+cp <your task instruction> PROMPT.md
+
+python3 oversight/ctl.py init          # five questions, about a minute
+python3 oversight/ctl.py lines         # check the rules registered
+python3 oversight/viewer/serve.py 4173 &
+claude --permission-mode acceptEdits "$(cat PROMPT.md)"
 ```
 
-Then, in two terminals:
+Answer holds in the terminal as they appear. Nothing else needs you.
 
-```bash
-cd task && python3 oversight/viewer/serve.py     # viewer at http://localhost:4173
-./run_interactive.sh                             # starts Claude Code on the task prompt
-```
+![The session running](docs/images/cli_session_start.png)
 
-With `GATE=on` the agent pauses at every proposed subagent spawn until you decide in the viewer
-(or with `python3 oversight/ctl.py watch`). Claude Code will ask permission for Bash commands;
-allow them, or pre-allow Bash for this folder only in `task/.claude/settings.local.json`.
-
-Setup options (environment variables): `GATE=on|off` (split gate), `RECOMMEND=on|off` (pros and
-cons on split cards), `CAP_MINUTES` (session time cap), `PB_CONTAINER` (name of the reference
-container, default `pb_ref`, so two setups can run side by side).
+A full worked example, including the rules used and the task text, is in
+[examples/swe_marathon_slack_clone](examples/swe_marathon_slack_clone).
 
 ## Terminal control
 
-Run from `task/`:
-
-```text
-python3 oversight/ctl.py status                  run state, gate mode, pending splits
-python3 oversight/ctl.py gate on|off             pause every proposed subagent spawn for review
-python3 oversight/ctl.py watch                   wait for proposed splits and decide them here
-python3 oversight/ctl.py nodes                   node ids, intents, status
-python3 oversight/ctl.py checkpoints             checkpoints you can reset to
-python3 oversight/ctl.py reset <cp>              reset to a checkpoint
-python3 oversight/ctl.py edit <node> --brief T   edit a node's brief and rerun it
-python3 oversight/ctl.py tell <node> "<text>"    instruction to a running node
-python3 oversight/ctl.py undo <backup-id>        reverse a reset or edit
-python3 oversight/ctl.py history                 every recorded intervention
+```bash
+python3 oversight/ctl.py lines         # the rules, in your words, as they grow
+python3 oversight/ctl.py status        # bands, counts, precision, catch-up score
+python3 oversight/ctl.py judgements 10 # the last ten decisions and their verdicts
+python3 oversight/ctl.py catchup       # what piled up since your last look
+python3 oversight/ctl.py pending       # anything waiting for an answer
+python3 oversight/ctl.py answer <id> yes|no "<note>"
+python3 oversight/ctl.py accept-all <parent>   # stop being asked about one parent
+python3 oversight/ctl.py declare --kind merge --what "..." --why "..."
 ```
 
-## Repository layout
+## Docs
 
-```text
-setup.sh             one-time setup for one ProgramBench task instance (creates ./task)
-run_interactive.sh   launch Claude Code on the prepared task
-grade.sh             pack ./task and run the official ProgramBench hidden tests
-overlay/             copied into ./task by setup.sh
-  CLAUDE.md, PROMPT.md       task instructions the agent sees
-  .claude/settings.json      hook registration
-  .claude/hooks/             record.py (recorder, checkpoints), gate.py (split gate),
-                             inbox.py (instructions to one agent), cap.py (time cap), guard.py
-  oversight/viewer/          index.html + serve.py (the viewer), summary.py, analyze.py
-  oversight/control.py       impact, checkpoints, reset, edit-and-rerun, split decisions
-  oversight/ctl.py           terminal version
-  oversight/tests/           smoke cases against the reference executable
-CHANGES.md           every difference from the official ProgramBench setup, and why
-RUNBOOK_chroma.md    step-by-step runbook for the chroma task
-docs/                programbench_setup.md (detailed setup notes), screenshot
+- [docs/DESIGN.md](docs/DESIGN.md) what triggers each component, what the terminal and the graph
+  show, and how to run it on a SWE Marathon task
+- [docs/CALIBRATION.md](docs/CALIBRATION.md) every decision from one live run, which calls were
+  right, which were wrong, what we changed, and the re-test
+- [examples/swe_marathon_slack_clone](examples/swe_marathon_slack_clone) the task used in that run
+
+## Also in the box
+
+The recorder writes every prompt, tool call, subagent start and stop, subagent brief, and file read
+or written to `oversight/events.jsonl`, with content hashes. File checkpoints (`cNNN`) are taken
+before every file change and workspace checkpoints (`wNNN`) at every human decision, so any state can
+be restored byte for byte. The earlier viewer, which draws data and conflict edges and a downstream
+impact card, is kept at `oversight/viewer/v1_index.html`.
+
+## Testing
+
+```bash
+python3 oversight/tests/test_align.py       # the gate end to end
+python3 oversight/tests/eval_judge.py       # 12 labelled spawn cases
+python3 oversight/tests/eval_judge.py actions   # 6 labelled action cases
+bash demo.sh                                # a scripted run of every feature
 ```
-
-## Why ProgramBench
-
-ProgramBench (`pip install programbench`) asks an agent to reimplement a real program from its
-documentation and a reference executable. Tasks like `chroma` (a syntax highlighter with hundreds
-of lexers) split naturally into parallel pieces that share a few files, which produces a rich,
-realistic work DAG with real overlaps and dependencies to oversee. `CHANGES.md` lists exactly how
-our setup differs from the official one.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT.
