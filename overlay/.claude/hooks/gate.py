@@ -99,7 +99,9 @@ if os.path.exists(os.path.join(CTL, "standing_%s.json" % caller)):
 # ---------------------------------------------------------------- judge it
 # The brief itself is the evidence. We do not hand the judge a scraped file list: a path can
 # appear in a sentence that says NOT to touch it, and a scraped list turns that into a flag.
-decision = dict(kind="spawn", name=desc, task=prompt[:1200])
+# the whole brief, not the first paragraph: briefs on long-horizon tasks run past 6,000 chars and
+# the deliverable that breaks a rule is often near the end
+decision = dict(kind="spawn", name=desc, task=prompt[:12000])
 t0 = time.time()
 verdict = judge.judge_decision(OV, decision, parent_status, model=model, settings=st)
 judge_s = round(time.time() - t0, 1)
@@ -117,6 +119,12 @@ align.credit_pause(PROJ, judge_s)             # the judge's latency is our overh
 if band == "silent":
     allow()
 
+if band == "hold" and st.get("involvement") == "never":
+    # the user asked never to be stopped: record it, count it, and let the spawn run
+    align.bump(PROJ, "repeat_flags" if (align.lines_already_refused(ANSWERED) &
+               {e.get("line_id") for e in (verdict.get("evidence") or [])}) else "flags_unanswered", 1)
+    allow()
+
 req = dict(rid=rid, dkey=dkey, ts=align.now_ms(), caller=caller, parent_label=parent_status["name"],
            child=desc, prompt=prompt[:2000], band=band, judgement=jrec)
 # `pending` means "this hook is still running and the spawn is blocked on you". A check never blocks,
@@ -126,8 +134,13 @@ json.dump(req, open(os.path.join(where, rid + ".json"), "w"), indent=1)
 
 # The spawn runs and the user is simply told; unanswered, it becomes a catch-up item, which is what
 # the SSOT asks for when a check goes unanswered.
+cited = sorted({e.get("line_id") for e in (verdict.get("evidence") or []) if e.get("line_id")}
+               | ({verdict["governed_by"]} if verdict.get("governed_by") else set()))
+refused = align.lines_already_refused(ANSWERED)
+
 if band == "check":
-    align.bump(PROJ, "checks_unanswered", 1)
+    # a repeat of a line the user already refused counts double (SSOT section 2)
+    align.bump(PROJ, "repeat_flags" if (refused & set(cited)) else "checks_unanswered", 1)
     out({"systemMessage": align.notice_text(jrec, "check", caller) +
          "\n  nothing is paused; answer later in the viewer, or ignore it"})
 
@@ -189,13 +202,14 @@ align.clear(SLOT)
 align.clear(os.path.join(PENDING, rid + ".json"))
 
 if dec is None:
-    align.bump(PROJ, "flags_unanswered", 1)
+    align.bump(PROJ, "repeat_flags" if (refused & set(cited)) else "flags_unanswered", 1)
     allow()                                   # nobody in reach: record it, do not strand the run
 
 answer = dec.get("answer", "accept")
 usernote = (dec.get("note") or "").strip()
-align.record_answer(ANSWERED, dict(dkey=dkey, rid=rid, answer=answer, note=usernote, ts=align.now_ms()))
 lines = sorted({e.get("line_id") for e in verdict["evidence"] if e.get("line_id")})
+align.record_answer(ANSWERED, dict(dkey=dkey, rid=rid, answer=answer, note=usernote,
+                                   lines=lines, ts=align.now_ms()))
 
 if answer in ("accept", "accept_all"):
     if verdict.get("if_accepted"):

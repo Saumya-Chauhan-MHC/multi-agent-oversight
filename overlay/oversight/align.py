@@ -206,6 +206,23 @@ def answered_for(path, dkey):
     return None
 
 
+def lines_already_refused(path):
+    """Lines the user has already said no to in this task.
+
+    A later departure citing one of these counts double toward catch-up: the user has made their
+    position on that line clear once, so a repeat they never see is worse than a fresh one.
+    """
+    out = set()
+    try:
+        for ln in open(path):
+            a = json.loads(ln)
+            if a.get("answer") == "no":
+                out.update(a.get("lines") or [])
+    except Exception:
+        pass
+    return out
+
+
 def record_answer(path, a):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "a") as f:
