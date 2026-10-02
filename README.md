@@ -5,10 +5,11 @@ write at the start, judges every delegation and every subagent action against th
 work only when it is confident one of your rules is being broken. The rest of the time it stays
 quiet and counts what you have not seen.
 
-![The graph after a run](docs/images/graph_run.png)
+![A spawn held for an answer](docs/images/hold_waiting.png)
 
-*After a run: the orchestrator and the subagent it spawned, the rules in your own words, nothing
-waiting for you.*
+*A spawn held: the brief bundled three components into one subagent, which contradicts a rule the
+user wrote. The evidence quotes the rule against the brief. Below it, a check that is waiting but
+pauses nothing, and the rules as they have grown during the run.*
 
 > Research prototype, used in a study on human oversight of coding agents. Tested on macOS with
 > Claude Code 2.1.287, on SWE Marathon and ProgramBench tasks.
@@ -57,6 +58,10 @@ The graph opens by itself only on a hold. Click a node to see what it owns, the 
 it, and what it did that departed:
 
 ![A node opened](docs/images/graph_node_open.png)
+
+A finished run with nothing outstanding looks like this:
+
+![The graph after a run](docs/images/graph_run.png)
 
 ## Quick start
 

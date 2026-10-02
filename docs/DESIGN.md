@@ -59,6 +59,10 @@ Code does not display SubagentStop output. Nothing pauses. Any look resets the s
 
 The graph opens by itself only on a hold.
 
+![a held spawn](images/hold_waiting.png)
+
+The same run with nothing outstanding:
+
 ![graph](images/graph_run.png)
 
 A node opens to show what it owns, the decision that started it, and what it did that departed:
