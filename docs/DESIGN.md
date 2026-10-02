@@ -1,70 +1,79 @@
 # Design
 
-The tool has two components. Both read one thing: the lines you wrote at init, in your words.
+Both components read one thing: the rules you write at init, in your words.
 
 ## Component 1: alignment flags
 
-At init you answer five questions. Answers to q1, q2 and q3 become lines that every later decision is
-judged against, and they are injected into the agent's first prompt. Two events trigger a judgement:
-a delegation, caught by a PreToolUse hook on the Task tool before any work exists, and a subagent's
-own Bash, Write or Edit call, caught by a second PreToolUse hook. The action hook first runs a
-keyword filter against your lines and skips the judge when nothing overlaps, so most tool calls cost
-nothing. What reaches the judge is your lines, the brief or the command, and the state of the parent
-that issued it. The judge returns a verdict, a confidence, and evidence pairs that quote your line
-against the text that conflicts with it. Confidence selects the band: at 0.85 and above a departure
-holds the spawn and asks you, between 0.50 and 0.65 or when no line covers the case you get one line
-and nothing pauses, and everything else is recorded with no notice. A subagent's own action holds
-only at 0.85 and above, and the orchestrator's own actions are recorded but never blocked. If you
-accept more than 30 percent of recent holds, holds become checks until that recovers.
+A confidence is produced only when the judge runs, and the judge runs on three events:
+
+1. **A delegation.** Every `Task` call, before the subagent exists. Skipped if you hold a standing
+   approval for that parent, if you already answered the same decision, or if there are no rules yet.
+2. **A tool call that touches your rules' words.** Any `Bash`, `Write` or `Edit` by a subagent or by
+   the orchestrator. Words from your rules are matched against the command and path. No overlap, no
+   judge call. A hit means one call, cached by command and rules.
+3. **A declared event.** `ctl.py declare` for a merge, reassignment or re-division, which fire no hook.
+
+Reads, searches, `ls`, repeats of an identical action and subagent finishes are never judged.
+
+The judge gets your rules, the brief or command, the child's own brief, and the parent's state. It
+returns a verdict, a confidence, and evidence that quotes your rule against the text that conflicts
+with it.
+
+When something is shown:
+
+| | |
+|---|---|
+| departs, confidence 0.85 or more | work pauses, you answer |
+| departs, confidence 0.50 to 0.85 | one line, nothing pauses |
+| no rule covers the case | one line, nothing pauses |
+| fits, or the judge failed | nothing |
+
+Four exceptions: a subagent's own action holds only at 0.85 or more and is otherwise silent; the
+orchestrator's own actions never hold; after five answered holds, if you accepted more than 30 percent
+of them, holds become checks; if you answered q4 with "never", holds become catch-up items.
 
 ## Component 2: catch-up
 
-Catch-up counts what you have not seen and tells you once it passes your threshold. The count is
-departures that were never shown, plus checks you did not answer, plus repeats of a decision you
-declined at double weight, plus one point per ten files written in nodes you have not opened, plus
-subagents that finished while you were away. Your answer to q5 sets the threshold at 3, 5 or 8. The
-count is taken when a subagent finishes, which is a seam in the work rather than an interruption of
-it. The line is delivered on the next tool result, because Claude Code does not display output from
-the SubagentStop hook. Nothing is paused by catch-up, and any look at the graph resets the count to
-zero.
+A count of what you have not seen: departures never shown, checks not answered, repeats of a decision
+you declined at double weight, one point per ten files written in nodes you have not opened, and
+subagents that finished while you were away. q5 sets the threshold at 3, 5 or 8. The count is taken
+when a subagent finishes. The line prints on the next tool result, because Claude Code does not
+display SubagentStop output. Nothing pauses. Any look resets the count.
 
-## What the terminal shows, and what the graph shows
+## Terminal and graph
 
 | | terminal | graph |
 |---|---|---|
-| a decision that fits | nothing | a mark on the node |
-| a check | one line, nothing paused | an item you can answer later |
-| a hold | the evidence, three choices, the agent waits | opens on that node |
-| catch-up | one line with the counts | the items behind those counts |
-| your lines | `ctl.py lines` | listed under the items |
+| fits | nothing | a mark on the node |
+| check | one line | an item to answer later |
+| hold | evidence, three choices, agent waits | opens on that node |
+| catch-up | one line with the counts | the items behind them |
 
-The graph opens by itself only on a hold. A check carries a link. A fit shows neither.
-
-## Screenshots
-
-The session running with the overlay in place:
-
-![terminal](images/cli_session_start.png)
-
-The graph after a run. Two nodes, the lines you wrote, nothing waiting:
+The graph opens by itself only on a hold.
 
 ![graph](images/graph_run.png)
 
-One node opened. What it owns, the decision that started it, what it did that departed, and a count
-of the rest:
+A node opens to show what it owns, the decision that started it, and what it did that departed:
 
 ![node](images/graph_node_open.png)
 
 ## Run it on a SWE Marathon task
 
-1. Make a task directory and put the task instruction in it as `PROMPT.md`.
-2. Copy the overlay into it: `cp -R overlay/.claude overlay/oversight <task dir>/`.
-3. Answer the five questions: `python3 oversight/ctl.py init`. Several rules in one answer can be
-   separated with semicolons. Check them with `python3 oversight/ctl.py lines`.
-4. Start the viewer: `python3 oversight/viewer/serve.py 4173`. Leave the tab closed.
-5. Start the agent: `claude --permission-mode acceptEdits "$(cat PROMPT.md)"`.
-6. Answer holds in the terminal as they appear. Everything else needs nothing from you.
-7. During or after the run: `ctl.py status`, `ctl.py judgements`, `ctl.py catchup`, `ctl.py lines`.
+See [examples/swe_marathon_slack_clone](../examples/swe_marathon_slack_clone) for the task used in
+[CALIBRATION.md](CALIBRATION.md), with the rules it was judged against.
 
-Every judgement is written to `oversight/judgements/`, every event to `oversight/events.jsonl`, and
-every answer to `oversight/control/interventions.jsonl`.
+```bash
+mkdir ~/task_run && cd ~/task_run
+cp -R <repo>/overlay/.claude <repo>/overlay/oversight .
+cp <repo>/examples/swe_marathon_slack_clone/PROMPT.md .
+
+python3 oversight/ctl.py init           # five questions
+python3 oversight/ctl.py lines          # check they registered
+python3 oversight/viewer/serve.py 4173 &
+claude --permission-mode acceptEdits "$(cat PROMPT.md)"
+```
+
+Answer holds as they appear. During or after: `ctl.py status`, `judgements`, `catchup`, `lines`.
+
+Judgements are in `oversight/judgements/`, events in `oversight/events.jsonl`, answers in
+`oversight/control/interventions.jsonl`.
