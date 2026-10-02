@@ -21,6 +21,8 @@ FULL = [
     dict(id="q3", text="each subagent runs its own tests before reporting done"),
 ]
 FILES_ONLY = [FULL[0]]
+# the q2 wording the demo uses; a spawn owning exactly one file must NOT depart from it
+PER_FILE = [FULL[0], dict(id="q2", text="one subagent per file or module"), FULL[3]]
 
 PARENT = dict(name="Build the web client", files_written=6, children=0, running_children=0,
               plan_next="build the client")
@@ -41,6 +43,11 @@ CASES = [
     ("compliant re-issue", FULL, PARENT,
      "Implement only app/realtime.py per docs/05-realtime.md; you must not touch run.sh or anything "
      "in tests/; run your own tests before reporting done", "silent"),
+    ("one file under 'per file or module' is a FIT", PER_FILE, PARENT,
+     "Implement server/ws.js only: the websocket hub per docs/05-realtime.md; run your own tests "
+     "before reporting done", "silent"),
+    ("one module under 'per file or module' is a FIT", PER_FILE, PARENT,
+     "Build the public/ web client module; you own public/ only; run your own tests", "silent"),
     ("division unstated: per-component split", FILES_ONLY, PARENT,
      "Implement the channel sidebar in app/static/sidebar.js; 4 more component subagents planned",
      "check"),

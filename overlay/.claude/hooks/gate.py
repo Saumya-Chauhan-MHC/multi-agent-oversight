@@ -33,6 +33,7 @@ OV = os.path.join(PROJ, "oversight")
 CTL = os.path.join(OV, "control")
 PENDING, DECISIONS = os.path.join(CTL, "pending"), os.path.join(CTL, "decisions")
 CHECKS = os.path.join(CTL, "checks")      # told, not waiting: nothing is blocked on these
+ASKED = os.path.join(CTL, "asked")        # handed to Claude Code's own prompt; we do not hold it
 SLOT = os.path.join(CTL, "slot_open")
 ANSWERED = os.path.join(CTL, "answered.jsonl")
 sys.path.insert(0, OV)
@@ -77,7 +78,7 @@ model = memory.load()
 if not model:
     allow()                                   # init never run: nothing to align to
 
-for d in (PENDING, DECISIONS, CHECKS, os.path.join(OV, "judgements")):
+for d in (PENDING, DECISIONS, CHECKS, ASKED, os.path.join(OV, "judgements")):
     os.makedirs(d, exist_ok=True)
 
 # ---------------------------------------------------------------- which decision this spawn is part of
@@ -118,8 +119,10 @@ if band == "silent":
 
 req = dict(rid=rid, dkey=dkey, ts=align.now_ms(), caller=caller, parent_label=parent_status["name"],
            child=desc, prompt=prompt[:2000], band=band, judgement=jrec)
-# A check never blocks, so it does not belong in `pending`, which means "a spawn is waiting on you".
-json.dump(req, open(os.path.join(CHECKS if band == "check" else PENDING, rid + ".json"), "w"), indent=1)
+# `pending` means "this hook is still running and the spawn is blocked on you". A check never blocks,
+# and in ask mode the question belongs to Claude Code, so neither goes there.
+where = CHECKS if band == "check" else (ASKED if st.get("surface_mode", "ask") == "ask" else PENDING)
+json.dump(req, open(os.path.join(where, rid + ".json"), "w"), indent=1)
 
 # The spawn runs and the user is simply told; unanswered, it becomes a catch-up item, which is what
 # the SSOT asks for when a check goes unanswered.
@@ -161,7 +164,12 @@ if st.get("surface_mode", "ask") == "ask":
                    lines=sorted({e.get("line_id") for e in verdict["evidence"] if e.get("line_id")}),
                    suggestion=verdict.get("suggestion")),
               open(os.path.join(CTL, "awaiting_answer.json"), "w"), indent=1)
-    ask("Let this subagent start?  (%s)" % (desc or "unnamed"),
+    # The evidence goes in the reason, which Claude Code always renders inside its own dialog.
+    # systemMessage alone was not reliably visible next to the prompt.
+    ask(align.notice_text(jrec, "hold", caller) +
+        "\n\nLet this subagent start?  (%s)\n"
+        "  1 yes    2 yes, stop asking for this folder (Claude Code's own rule)    3 no"
+        % (desc or "unnamed"),
         align.notice_text(jrec, "hold", caller))
 
 # file mode: the decision arrives as a file from ctl.py, the viewer, or a test

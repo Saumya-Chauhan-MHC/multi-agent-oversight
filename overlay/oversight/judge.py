@@ -36,6 +36,11 @@ Return ONLY a JSON object, no prose, no code fence, with these fields:
 
 Rules:
 - "departs" requires at least one evidence pair, and every line_id must be one of the user's lines.
+- A proposal that MATCHES a line is a fit, never a departure. "one subagent per file or module"
+  is satisfied by a subagent that owns exactly one file, and by one that owns exactly one module.
+  Never flag a proposal for being compatible with a line.
+- In each evidence pair, `proposed` must quote the specific words from the brief that conflict with
+  the line, not the spawn's name. If you cannot quote conflicting words, there is no departure.
 - Evidence must quote what the proposal ITSELF says. Do not infer consequences the proposal does not
   state. "Building a package normally means touching __init__.py" is NOT evidence; the brief naming
   __init__.py is. If a protected file is not named in the proposal, no rule about that file is

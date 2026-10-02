@@ -50,7 +50,7 @@
 <body>
 <header>
   <b>oversight</b>
-  <span id="since">since you last looked</span>
+  <span id="state"></span>
   <span id="counts"></span>
   <span id="mode"></span>
 </header>
@@ -65,7 +65,9 @@
     <div id="dag"></div>
   </div>
   <div class="side">
-    <h3>since you last looked</h3>
+    <h3 id="waitHead" hidden>waiting for you . the agent is paused</h3>
+    <div id="waiting"></div>
+    <h3 id="catchHead">since you last looked</h3>
     <div id="items"></div>
     <div style="padding:0 14px 16px"><button class="pri" onclick="caughtUp()">caught up</button>
       <span style="color:var(--dim);font-size:12px">nothing to change; resets your last look to now</span></div>
@@ -121,25 +123,34 @@ function draw(){
   };
   if (root) place(root, dag); else dag.innerHTML = '<div class="empty">no work yet</div>';
 
-  const c = S.counters;
+  const c = S.counters, waiting = S.waiting || 0;
+  $('#state').textContent = waiting
+    ? `${waiting} spawn${waiting > 1 ? 's' : ''} paused, waiting for your answer`
+    : 'nothing is paused';
+  $('#state').style.color = waiting ? 'var(--depart)' : 'var(--dim)';
   $('#counts').textContent =
-    `${c.flags} departures . ${c.checks} unanswered checks . ${c.unseen_files} files you have not opened`
-    + ` . outdatedness ${c.total} of ${c.threshold}`;
-  $('#since').textContent = c.minutes_since_look ? `since your last look (${c.minutes_since_look} min)`
-                                                 : 'since you last looked';
+    `catch-up: ${c.flags} unshown departures . ${c.checks} unanswered checks . `
+    + `${c.unseen_files} files you have not opened . ${c.total} of ${c.threshold}`;
   $('#mode').textContent = `q4 ${S.settings.involvement} . q5 ${S.settings.threshold}`;
 
-  const it = $('#items'); it.innerHTML = '';
-  if (!S.items.length) it.innerHTML = '<div class="empty">nothing waiting for you</div>';
+  const it = $('#items'), wt = $('#waiting');
+  it.innerHTML = ''; wt.innerHTML = '';
+  const held = S.items.filter(i => i.kind === 'waiting');
+  const later = S.items.filter(i => i.kind !== 'waiting');
+  $('#waitHead').hidden = !held.length;
+  $('#catchHead').textContent = c.minutes_since_look
+    ? `since you last looked (${c.minutes_since_look} min ago)` : 'since you last looked';
+  if (!later.length) it.innerHTML = '<div class="empty">nothing piled up</div>';
   S.items.forEach(i => {
     const el = document.createElement('div'); el.className = 'item';
-    const badge = i.kind === 'flag' ? '<span class="badge" style="background:var(--depart)">!</span>'
+    const badge = (i.kind === 'flag' || i.kind === 'waiting')
+                ? '<span class="badge" style="background:var(--depart)">!</span>'
                 : i.kind === 'check' ? '<span class="badge" style="background:var(--guess)">?</span>'
                 : i.kind === 'finished' ? '<span class="badge" style="background:var(--fit)">&#10003;</span>'
                 : '<span class="badge" style="background:var(--accent)">+</span>';
     el.innerHTML = `<div class="t">${badge}${esc(i.title)}</div><div class="c">${esc(i.caption)}</div>` +
       (i.if_accepted ? `<div class="acc">accept adds to your lines: "${esc(i.if_accepted)}"</div>` : '');
-    if (i.kind === 'flag' || i.kind === 'check'){
+    if (i.kind === 'waiting' || i.kind === 'flag' || i.kind === 'check'){
       const accept = document.createElement('button'); accept.textContent = 'accept';
       accept.onclick = () => post('/answer', {rid:i.rid, dkey:i.dkey, answer:'accept',
                                               lines:i.lines, if_accepted:i.if_accepted, caller:i.caller});
@@ -154,7 +165,7 @@ function draw(){
       box.appendChild(ta); box.appendChild(send);
       el.appendChild(accept); el.appendChild(no); el.appendChild(box);
     }
-    it.appendChild(el);
+    (i.kind === 'waiting' ? wt : it).appendChild(el);
   });
 
   $('#lines').innerHTML = S.lines.map(l =>

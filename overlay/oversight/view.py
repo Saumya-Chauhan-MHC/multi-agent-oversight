@@ -60,6 +60,23 @@ def state(proj):
     js = _judgements(proj)
     answers = _answers(proj)
     ns = nodes(proj)
+    # a spawn whose request file is still in control/pending is BLOCKED on the user right now; that
+    # is a different state from "things piled up while you were away" and must not share a heading
+    waiting_rids = {os.path.basename(p)[:-5]
+                    for p in glob.glob(os.path.join(align.ctl(proj), "pending", "*.json"))}
+    # In single-terminal mode the question belongs to Claude Code, so we never see the answer
+    # directly. A subagent starting after we asked IS the answer, so the item resolves itself
+    # instead of claiming forever that the agent is paused.
+    starts = [e.get("ov_ts", 0) for e in align.load_events(proj) if e.get("ov_event") == "subagent_start"]
+    for p in glob.glob(os.path.join(align.ctl(proj), "asked", "*.json")):
+        try:
+            a = json.load(open(p))
+        except Exception:
+            continue
+        if any(t > a.get("ts", 0) for t in starts):
+            os.remove(p)                      # it was allowed and ran
+        else:
+            waiting_rids.add(a.get("rid"))
 
     # one mark per node, from the judgement that let it start
     mark_by_child = {}
@@ -92,9 +109,12 @@ def state(proj):
             continue                                   # already answered: not an item
         lines = sorted({e.get("line_id") for e in (j.get("evidence") or []) if e.get("line_id")})
         if j.get("band") == "hold":
-            why = "Not shown (your q4 = never)" if st.get("involvement") == "never" else \
-                  "Held, and still waiting for you"
-            kind, rank = "flag", 0 if (said_no_lines & set(lines)) else 1
+            blocked = j.get("rid") in waiting_rids
+            why = ("The agent is waiting on your answer in the terminal." if blocked else
+                   "Not shown (your q4 = never)" if st.get("involvement") == "never" else
+                   "This departed from what you said, and you have not answered it.")
+            kind, rank = ("waiting" if blocked else "flag"), (-1 if blocked else
+                          0 if (said_no_lines & set(lines)) else 1)
         elif j.get("band") == "check":
             why = "Check you did not answer; the tool went with its guess"
             kind, rank = "check", 2
@@ -105,10 +125,14 @@ def state(proj):
             kind=kind, rank=rank, rid=j.get("rid"), dkey=j.get("dkey"), caller=j.get("caller"),
             title="%s -> %s%s" % (j.get("parent_label"), j.get("child"),
                                   (": departs from %s" % ", ".join(lines)) if lines else ""),
-            caption="%s%s %s" % (
+            caption="%s%s %s%s" % (
                 (str(ev.get("proposed")) + ". ") if ev.get("proposed") else "",
                 ('You said (%s): "%s".' % (ev.get("line_id"), ev.get("said"))) if ev.get("said")
-                else "Nothing in your lines covers this.", why),
+                else "Nothing in your lines covers this.",
+                # the judge's own reason for the call, which is what tells the user HOW it conflicts
+                ((" Why: " + str((j.get("suggestion") or {}).get("note"))[:220] + ".")
+                 if (j.get("suggestion") or {}).get("note") else ""),
+                " " + why),
             if_accepted=j.get("if_accepted"), lines=lines,
             confidence=j.get("confidence"), ts=j.get("ts")))
 
@@ -141,6 +165,7 @@ def state(proj):
     total = (c.get("flags_unanswered", 0) + c.get("checks_unanswered", 0)
              + 2 * c.get("repeat_flags", 0) + unseen_writes // 10)
     return dict(
+        waiting=sum(1 for i in items if i["kind"] == "waiting"),
         lines=[dict(id=m["id"], text=m["text"], source=m.get("source"), status=m.get("status"))
                for m in memory.load()],
         settings=dict(involvement=st.get("involvement"), threshold=st.get("catchup_threshold"),
