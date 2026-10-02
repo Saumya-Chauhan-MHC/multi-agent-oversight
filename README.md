@@ -15,14 +15,31 @@ waiting for you.*
 
 ## The two components
 
-| | alignment flags | catch-up |
-|---|---|---|
-| **what fires it** | a delegation, or a tool call whose text matches a word in your rules | a subagent finishing |
-| **what it asks** | one judge call: your rules, the brief or command, the child's brief, the parent's state | nothing, it is arithmetic |
-| **what it returns** | verdict, confidence, evidence quoting your rule against the conflicting text | a score out of your threshold |
-| **when you see it** | departs at 0.85 or more: work pauses. 0.50 to 0.85, or no rule covers it: one line | score past your threshold: one line |
-| **what it costs you** | an answer, only on a pause | a look, or nothing |
-| **what it never does** | interrupt on a fit, or ask twice about one decision | pause anything |
+**Alignment flags**
+
+| | |
+|---|---|
+| fires on | a delegation, or a tool call whose text matches a word in your rules |
+| cost when it does not fire | none, the match is a string check |
+| the judge is given | your rules, the brief or command, the child's own brief, the parent's state |
+| it returns | a verdict, a confidence, and evidence quoting your rule against the conflicting text |
+| departs at 0.85 or more | the work pauses and you answer |
+| departs at 0.50 to 0.85 | one line, nothing pauses |
+| no rule covers it | one line, nothing pauses |
+| fits, or the judge failed | nothing, the node is marked |
+| never | interrupts on a fit, or asks twice about the same decision |
+
+**Catch-up**
+
+| | |
+|---|---|
+| fires on | a subagent finishing |
+| cost | none, it is arithmetic over counters |
+| counts | departures never shown (1 each), checks not answered (1), repeats of a decision you declined (2), files written in nodes you have not opened (1 per 10), subagents finished while you were away (1) |
+| your threshold | 3, 5 or 8, from q5 |
+| past the threshold | one line on the next tool result |
+| resets | any look at the graph |
+| never | pauses anything |
 
 The band thresholds, the four exceptions to them, and the catch-up formula are in
 [docs/DESIGN.md](docs/DESIGN.md).
@@ -107,8 +124,7 @@ python3 oversight/ctl.py declare --kind merge --what "..." --why "..."
 The recorder writes every prompt, tool call, subagent start and stop, subagent brief, and file read
 or written to `oversight/events.jsonl`, with content hashes. File checkpoints (`cNNN`) are taken
 before every file change and workspace checkpoints (`wNNN`) at every human decision, so any state can
-be restored byte for byte. The earlier viewer, which draws data and conflict edges and a downstream
-impact card, is kept at `oversight/viewer/v1_index.html`.
+be restored byte for byte.
 
 ## Testing
 

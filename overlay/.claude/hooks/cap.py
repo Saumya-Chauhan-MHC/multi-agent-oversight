@@ -10,7 +10,7 @@ config (mini-swe-agent programbench.yaml) into Claude Code hooks:
             `cap.py gate` (PreToolUse, all tools) denies every tool once the cap is reached, with a
             reason telling the agent to stop. You then exit Claude Code and the session is over.
 
-The cap length is oversight/cap_minutes (written by setup.sh, default 90; 0 disables).
+The cap length is oversight/cap_minutes (default 90; 0 disables).
 The timer starts at each launch / resume (record.py writes oversight/cap_start_<n>.txt).
 """
 import sys, json, os, time
