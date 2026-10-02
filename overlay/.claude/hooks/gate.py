@@ -107,7 +107,15 @@ verdict = judge.judge_decision(OV, decision, parent_status, model=model, setting
 judge_s = round(time.time() - t0, 1)
 band = judge.band(verdict, st, model=model, dimension="division")
 
-jrec = dict(rid=rid, dkey=dkey, ts=align.now_ms(), caller=caller,
+# Below 0.70 precision a flagger is worse than nothing (Dixon and Wickens): stop holding the agent
+# and let the remaining flags arrive as checks instead. Applied before the record is written, so the
+# log says what actually happened.
+prec, n = align.precision(ANSWERED)
+downgraded = None
+if band == "hold" and prec is not None and n >= 5 and prec < float(st.get("precision_floor", 0.70)):
+    band, downgraded = "check", "precision %.2f over last %d holds" % (prec, n)
+
+jrec = dict(rid=rid, dkey=dkey, ts=align.now_ms(), caller=caller, downgraded=downgraded,
             parent_label=parent_status["name"], child=desc, files=align.paths_in(prompt),
             judge_s=judge_s, band=band,
             **{k: verdict.get(k) for k in ("verdict", "covered", "governed_by", "confidence", "evidence",

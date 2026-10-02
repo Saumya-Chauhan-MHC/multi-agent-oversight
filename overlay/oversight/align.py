@@ -229,6 +229,28 @@ def record_answer(path, a):
         f.write(json.dumps(a) + "\n")
 
 
+def precision(path, window=10):
+    """How often a hold turned out to be worth showing, over the last `window` answered holds.
+
+    A hold the user declined counts as a hit; one they waved through counts as a false alarm. It is a
+    proxy (a tired user accepts too), but it is the only in-session signal we have, and the alerting
+    literature is clear that a flagger below roughly 0.70 is worse than none at all.
+    """
+    rows = []
+    try:
+        for ln in open(path):
+            a = json.loads(ln)
+            if a.get("answer") in ("no", "accept", "accept_all"):
+                rows.append(a["answer"])
+    except Exception:
+        return None, 0
+    rows = rows[-window:]
+    if not rows:
+        return None, 0
+    hits = sum(1 for r in rows if r == "no")
+    return hits / len(rows), len(rows)
+
+
 def slot_free(slot):
     """One open question at a time. A stale slot from a crashed hook must not deadlock the run."""
     try:
@@ -293,4 +315,6 @@ def notice_text(j, kind, caller):
     if j.get("if_accepted"):
         L.append("  accept adds    \"%s\"" % str(j.get("if_accepted"))[:110])
     L.append("  dag            http://localhost:4173/?focus=%s" % caller)
+    if kind == "hold":
+        L.append("  stop asking for this parent:  python3 oversight/ctl.py accept-all %s" % caller)
     return "\n".join(L)

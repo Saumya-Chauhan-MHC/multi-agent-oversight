@@ -208,6 +208,15 @@ def counters_line(c, st):
                     st.get("catchup_threshold", 5)))
 
 
+def accept_all(argv):
+    """Stop asking for one parent. Claude Code's own prompt cannot offer this, so it lives here."""
+    parent = argv[0] if argv else "orchestrator"
+    os.makedirs(CTL, exist_ok=True)
+    json.dump(dict(parent=parent, ts=align.now_ms()),
+              open(os.path.join(CTL, "standing_%s.json" % parent), "w"))
+    print("standing approval for %s: further spawns from it will not be held" % parent)
+
+
 def status(_argv):
     st, c = memory.settings(), align.counters(PROJ)
     model = memory.load()
@@ -220,6 +229,11 @@ def status(_argv):
     print("counters     %s" % why)
     ps = glob.glob(os.path.join(PENDING, "*.json"))
     print("waiting      %d" % len(ps))
+    prec, n = align.precision(os.path.join(CTL, "answered.jsonl"))
+    if prec is not None:
+        print("precision    %.2f over the last %d answered holds%s" %
+              (prec, n, "  (below the floor: holds are being downgraded to checks)"
+               if n >= 5 and prec < st.get("precision_floor", 0.70) else ""))
     js = sorted(glob.glob(os.path.join(align.ov(PROJ), "judgements", "*.json")))
     bands = {}
     for p in js:
@@ -258,6 +272,17 @@ def judgements(argv):
 
 CMDS = dict(init=init, lines=lines_cmd, status=status, pending=pending, answer=answer,
             watch=watch, catchup=catchup, judgements=judgements)
+def allow_action(argv):
+    """Let a blocked subagent action through: clears what the action gate remembered about it."""
+    import shutil
+    d = os.path.join(CTL, "action_seen")
+    n = len(glob.glob(os.path.join(d, "*.json")))
+    shutil.rmtree(d, ignore_errors=True)
+    print("cleared %d remembered actions; the agent can retry" % n)
+
+
+CMDS["accept-all"] = accept_all
+CMDS["allow-action"] = allow_action
 CMDS["caught-up"] = caught_up
 
 if __name__ == "__main__":

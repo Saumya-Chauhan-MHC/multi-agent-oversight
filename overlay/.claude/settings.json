@@ -58,6 +58,16 @@
             "timeout": 3600
           }
         ]
+      },
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/action_gate.py\"",
+            "timeout": 120
+          }
+        ]
       }
     ],
     "PostToolUse": [
