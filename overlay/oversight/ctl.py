@@ -215,6 +215,78 @@ def accept_all(argv):
     print("standing approval for %s: further spawns from it will not be held" % parent)
 
 
+def declare(argv):
+    """The agent declares an orchestration decision that is not a spawn, and we judge it.
+
+    Merges, reassignments and re-plans are made in prose, so no hook sees them. I0 asks the
+    orchestrator to run this before it acts. It is soft (the model can skip it), which is why the
+    spawn gate stays as the hard backstop, but when it is used the question arrives before anything
+    has been built.
+    """
+    ap = argparse.ArgumentParser(prog="ctl.py declare")
+    ap.add_argument("--kind", default="merge", help="merge | reassign | replan | split")
+    ap.add_argument("--what", required=True, help="what you are about to do, in one sentence")
+    ap.add_argument("--why", default="")
+    ap.add_argument("--files", default="", help="comma separated, optional")
+    a = ap.parse_args(argv)
+
+    import judge
+    st, model = memory.settings(), memory.load()
+    if not model:
+        print("[oversight] no lines set; nothing to check. Proceed.")
+        return
+    decision = dict(kind=a.kind, name=a.what,
+                    task="%s\nWhy: %s\nFiles: %s" % (a.what, a.why or "(not stated)", a.files or "(not stated)"))
+    nodes = align.nodes_from_events(PROJ)
+    parent = dict(name="orchestrator", files_written=len(nodes.get("orchestrator", {}).get("writes", [])),
+                  children=sum(1 for n in nodes.values() if n.get("parent") == "orchestrator"),
+                  running_children=sum(1 for n in nodes.values()
+                                       if n.get("parent") == "orchestrator" and n["status"] == "running"),
+                  plan_next=a.why)
+    verdict = judge.judge_decision(align.ov(PROJ), decision, parent, model=model, settings=st)
+    band = judge.band(verdict, st, model=model)
+    rid = "dec-%d" % align.now_ms()
+    jrec = dict(rid=rid, dkey=rid, ts=align.now_ms(), caller="orchestrator", parent_label="orchestrator",
+                child=a.what, kind=a.kind, band=band,
+                **{k: verdict.get(k) for k in ("verdict", "confidence", "evidence", "precedent",
+                                               "suggestion", "if_accepted", "source")})
+    os.makedirs(os.path.join(align.ov(PROJ), "judgements"), exist_ok=True)
+    json.dump(jrec, open(os.path.join(align.ov(PROJ), "judgements", rid + ".json"), "w"), indent=1)
+    align.append_event(PROJ, dict(ov_event="judgement", **jrec))
+
+    if band == "silent":
+        print("[oversight] checked against the user's lines: nothing to raise. Go ahead.")
+        return
+    print(align.notice_text(jrec, band, "orchestrator"))
+    if band == "check":
+        print("[oversight] nothing you must wait for. Go ahead, the user can look later.")
+        return
+    os.makedirs(PENDING, exist_ok=True)
+    json.dump(dict(rid=rid, dkey=rid, ts=align.now_ms(), caller="orchestrator",
+                   parent_label="orchestrator", child=a.what, prompt=a.what, band=band, judgement=jrec),
+              open(os.path.join(PENDING, rid + ".json"), "w"), indent=1)
+    print("[oversight] waiting for the user to answer ...")
+    dp = os.path.join(DECISIONS, rid + ".json")
+    t0 = time.time()
+    while time.time() - t0 < int(st.get("decision_timeout_s", 1800)):
+        if os.path.exists(dp):
+            d = json.load(open(dp))
+            align.clear(os.path.join(PENDING, rid + ".json"))
+            align.record_answer(os.path.join(CTL, "answered.jsonl"),
+                                dict(dkey=rid, rid=rid, answer=d.get("answer"), note=d.get("note", ""),
+                                     lines=sorted({e.get("line_id") for e in (verdict.get("evidence") or [])}),
+                                     ts=align.now_ms()))
+            if d.get("answer") in ("accept", "accept_all"):
+                print("[oversight] the user said yes. Go ahead.")
+            else:
+                print("[oversight] the user said NO. Their note: %s\nDo not do this; re-plan."
+                      % (d.get("note") or "(none)"))
+            return
+        time.sleep(0.5)
+    align.clear(os.path.join(PENDING, rid + ".json"))
+    print("[oversight] no answer in time; proceed, it has been recorded.")
+
+
 def status(_argv):
     st, c = memory.settings(), align.counters(PROJ)
     model = memory.load()
@@ -281,6 +353,7 @@ def allow_action(argv):
 
 CMDS["accept-all"] = accept_all
 CMDS["allow-action"] = allow_action
+CMDS["declare"] = declare
 CMDS["caught-up"] = caught_up
 
 if __name__ == "__main__":

@@ -169,4 +169,7 @@ def i0(model=None):
         return ""
     rules = "; ".join(m["text"].rstrip(".") for m in keep)
     return ("[oversight] The user's preferences for this task: " + rules +
-            ". Spawns that depart from these are held for the user's decision.")
+            ". Spawns that depart from these are held for the user's decision. Before you merge two "
+            "pieces of work, hand one agent's files to another, or change how the work is divided, "
+            "run: python3 oversight/ctl.py declare --kind merge|reassign|replan --what \"<one "
+            "sentence>\" --why \"<why>\" . It answers in seconds and tells you whether to proceed.")
