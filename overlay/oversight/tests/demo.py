@@ -77,6 +77,8 @@ def spawn(desc, prompt, answer=None, note="", agent_id=None, label=""):
                 print("\n  -> the spawn is %s" % ("DENIED, the agent gets the note" if d == "deny" else d))
         except Exception:
             print(out)
+    elif band == "?":
+        print("\n  -> allowed by your standing approval: no judge call at all")
     else:
         print("\n  -> silent: the spawn starts, the node is just marked (band=%s)" % band)
     time.sleep(SLOW)
@@ -151,6 +153,66 @@ say(9, "catch-up: what piled up while you were not looking",
 run([sys.executable, "oversight/ctl.py", "status"])
 run([sys.executable, "oversight/ctl.py", "catchup"])
 run([sys.executable, "oversight/ctl.py", "judgements", "8"])
+
+# ---------------------------------------------------------------- 10
+say(10, "a child's OWN command is judged too, not just its brief",
+    "in a real run a subagent installed a package no brief ever mentioned")
+import subprocess as _sp
+memory.append_answer("no subagent installs packages", ["q1a"], source="added for this step")
+run([sys.executable, "oversight/ctl.py", "lines"])
+for cmd, label in (("npm install playwright --save-dev", "installing a package"),
+                   ("python3 -m pytest tests/ -x", "just running tests")):
+    print("the subagent is about to run:  %s   (%s)" % (cmd, label))
+    payload = dict(session_id="demo", cwd=T, agent_id="aCHILD", tool_name="Bash",
+                   tool_use_id="d%d" % time.time(), tool_input=dict(command=cmd))
+    p = _sp.run([sys.executable, os.path.join(T, ".claude/hooks/action_gate.py")],
+                input=json.dumps(payload), capture_output=True, text=True,
+                env=dict(os.environ, CLAUDE_PROJECT_DIR=T), timeout=120)
+    out = (p.stdout or "").strip()
+    if out:
+        print(json.loads(out)["systemMessage"])
+        print("  -> BLOCKED before it ran\n")
+    else:
+        print("  -> allowed, silently\n")
+    time.sleep(SLOW)
+
+# ---------------------------------------------------------------- 11
+say(11, "a merge is not a tool call, so the agent declares it",
+    "merges and reassignments fire no hook; the agent runs one command and waits for you")
+import threading as _th
+def _answer_declare():
+    t0 = time.time()
+    while time.time() - t0 < 90:
+        for f in glob.glob(os.path.join(PENDING, "dec-*.json")):
+            rid = os.path.basename(f)[:-5]
+            time.sleep(SLOW)
+            print("  > you answer: no  \"keep redis separate\"")
+            json.dump(dict(answer="no", note="keep redis separate", ts=align.now_ms()),
+                      open(os.path.join(DECISIONS, rid + ".json"), "w"))
+            return
+        time.sleep(0.3)
+_th.Thread(target=_answer_declare, daemon=True).start()
+run([sys.executable, "oversight/ctl.py", "declare", "--kind", "merge",
+     "--what", "fold the redis component's files into the api subagent", "--why", "redis is nearly done"])
+
+# ---------------------------------------------------------------- 12
+say(12, "stop being asked about one parent",
+    "Claude Code's own prompt cannot offer this, so it lives in the terminal")
+run([sys.executable, "oversight/ctl.py", "accept-all", "orchestrator"])
+spawn("Anything at all", "Build the whole backend and the client in one subagent, tests at the end")
+
+# ---------------------------------------------------------------- 13
+say(13, "if the tool keeps crying wolf, it stops stopping you",
+    "below 0.70 precision over the last five answered holds, holds become checks")
+os.remove(glob.glob(os.path.join(CTL, "standing_*.json"))[0])
+for i in range(5):
+    align.record_answer(os.path.join(CTL, "answered.jsonl"),
+                        dict(dkey="demo%d" % i, rid="demo%d" % i, answer="accept", lines=["q2"],
+                             ts=align.now_ms()))
+print("  (five holds in a row that you waved through)")
+run([sys.executable, "oversight/ctl.py", "status"])
+spawn("Everything service", "Build the store, the api, the websocket layer and the client in one "
+                            "subagent; the orchestrator will test at the end")
 
 print("\ndone. every judgement is in oversight/judgements/, every answer in "
       "oversight/control/interventions.jsonl\n")
