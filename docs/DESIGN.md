@@ -21,12 +21,13 @@ with it.
 
 When something is shown:
 
-| | |
-|---|---|
-| departs, confidence 0.85 or more | work pauses, you answer |
-| departs, confidence 0.50 to 0.85 | one line, nothing pauses |
-| no rule covers the case | one line, nothing pauses |
-| fits, or the judge failed | nothing |
+| verdict | confidence | band | what happens |
+|---|---|---|---|
+| departs | 0.85 and up | hold | work pauses, evidence shown, graph opens on that node |
+| departs | 0.50 to 0.85 | check | one line, nothing pauses |
+| any | any, no rule covers it | check | one line, nothing pauses |
+| fits | any | silent | a mark on the node |
+| judge failed | n/a | silent | work proceeds |
 
 Four exceptions: a subagent's own action holds only at 0.85 or more and is otherwise silent; the
 orchestrator's own actions never hold; after five answered holds, if you accepted more than 30 percent
@@ -34,11 +35,18 @@ of them, holds become checks; if you answered q4 with "never", holds become catc
 
 ## Component 2: catch-up
 
-A count of what you have not seen: departures never shown, checks not answered, repeats of a decision
-you declined at double weight, one point per ten files written in nodes you have not opened, and
-subagents that finished while you were away. q5 sets the threshold at 3, 5 or 8. The count is taken
-when a subagent finishes. The line prints on the next tool result, because Claude Code does not
-display SubagentStop output. Nothing pauses. Any look resets the count.
+A score of what you have not seen, taken when a subagent finishes:
+
+| counts toward the score | weight |
+|---|---|
+| departures that were never shown | 1 each |
+| checks you did not answer | 1 each |
+| repeats of a decision you declined | 2 each |
+| files written in nodes you have not opened | 1 per 10 |
+| subagents that finished while you were away | 1 each |
+
+q5 sets the threshold at 3, 5 or 8. Past it, one line prints on the next tool result, because Claude
+Code does not display SubagentStop output. Nothing pauses. Any look resets the score to zero.
 
 ## Terminal and graph
 

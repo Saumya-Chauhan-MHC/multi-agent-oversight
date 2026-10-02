@@ -15,18 +15,17 @@ waiting for you.*
 
 ## The two components
 
-**Alignment flags.** Two hooks fire on their own: one before a subagent is spawned, one before a
-subagent runs a command. A keyword filter drops anything your rules do not mention, at no cost. What
-is left goes to a judge with your rules, the brief or command, the child's own brief, and the state
-of the parent. The judge returns a verdict, a confidence, and evidence that quotes your rule against
-the text that conflicts with it. At 0.85 and above the work pauses and you answer. Between 0.50 and
-0.65, or when no rule covers the case, you get one line and nothing pauses. Below that, nothing is
-shown.
+| | alignment flags | catch-up |
+|---|---|---|
+| **what fires it** | a delegation, or a tool call whose text matches a word in your rules | a subagent finishing |
+| **what it asks** | one judge call: your rules, the brief or command, the child's brief, the parent's state | nothing, it is arithmetic |
+| **what it returns** | verdict, confidence, evidence quoting your rule against the conflicting text | a score out of your threshold |
+| **when you see it** | departs at 0.85 or more: work pauses. 0.50 to 0.85, or no rule covers it: one line | score past your threshold: one line |
+| **what it costs you** | an answer, only on a pause | a look, or nothing |
+| **what it never does** | interrupt on a fit, or ask twice about one decision | pause anything |
 
-**Catch-up.** A count of what you have not seen: departures that were never shown, checks you did not
-answer, repeats of a decision you declined at double weight, one point per ten files written in nodes
-you have not opened, and subagents that finished while you were away. When it passes your threshold
-you get one line at the next seam in the work. Nothing is paused. Any look resets it.
+The band thresholds, the four exceptions to them, and the catch-up formula are in
+[docs/DESIGN.md](docs/DESIGN.md).
 
 ## What the terminal shows, and what the graph shows
 
@@ -55,9 +54,29 @@ python3 oversight/viewer/serve.py 4173 &
 claude --permission-mode acceptEdits "$(cat PROMPT.md)"
 ```
 
-Answer holds in the terminal as they appear. Nothing else needs you.
+Answer holds in the terminal as they appear. Nothing else needs you. What the tool shows afterwards,
+from one real run:
 
-![The session running](docs/images/cli_session_start.png)
+```
+$ python3 oversight/ctl.py status
+lines        5 (q1a, q1b, q1c, q2, q3)
+involvement  ask   catch-up threshold 3   surface ask
+counters     outdatedness 0 = 0 departures + 0 unanswered checks + 0 repeats x2
+             + 0 (0 unseen edits, 1 per 10) + 0 finished while away
+judgements   9  {'silent': 9}
+
+$ python3 oversight/ctl.py judgements 3
+  silent fits      0.90  orchestrator                 -> Build Huddle SPA frontend
+  silent departs   0.60  Build Huddle SPA frontend    -> web/tests/mock_server.py   q1c
+  silent fits      0.60  Build Huddle SPA frontend    -> timeout 300 python3 web/tests/ui_test.py
+
+$ python3 oversight/ctl.py lines
+  q1a: "no subagent installs packages" (init, confirmed)
+  q1b: "launchers and anything in bin/ are mine" (init, confirmed)
+  q1c: "a subagent never edits a file it does not own" (init, confirmed)
+  q2:  "one subagent per package or component" (init, confirmed)
+  q3:  "each subagent runs its own tests before reporting done" (init, confirmed)
+```
 
 A full worked example, including the rules used and the task text, is in
 [examples/swe_marathon_slack_clone](examples/swe_marathon_slack_clone).
