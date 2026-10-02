@@ -81,6 +81,40 @@ def reset_look(proj, why="look"):
     return c
 
 
+def outdatedness(proj, settings=None):
+    """How stale the user's picture is, and why. One implementation, three callers.
+
+    Points (SSOT section 2): an unshown departure or unanswered check counts 1; either one citing a
+    line the user already refused counts 2; file volume in places they have not opened counts 1 per
+    `files_per_point`; a subagent that finished while they were away counts 1.
+    """
+    import json as _json
+    c = counters(proj)
+    per = int((settings or {}).get("files_per_point", 10) or 10)
+    last = c.get("last_look_ts", 0)
+    seen = set(c.get("seen_nodes") or [])
+    # Claude Code emits subagent_stop for internal helpers we never saw spawn (26 stop events for 3
+    # real children in one run), so only agents we watched START count as work the user missed.
+    started = {e.get("agent_id") for e in load_events(proj) if e.get("ov_event") == "subagent_start"}
+    files = 0
+    done = set()
+    for e in load_events(proj):
+        if e.get("ov_ts", 0) <= last:
+            continue
+        if (e.get("ov_event") == "pre_tool" and e.get("tool_name") in ("Write", "Edit", "MultiEdit")
+                and (e.get("agent_id") or "orchestrator") not in seen):
+            files += 1
+        if (e.get("ov_event") == "subagent_stop" and e.get("agent_id") in started
+                and e["agent_id"] not in seen):
+            done.add(e["agent_id"])
+    finished = len(done)
+    parts = dict(flags=c.get("flags_unanswered", 0), checks=c.get("checks_unanswered", 0),
+                 repeats=c.get("repeat_flags", 0), unseen_files=files, finished=finished)
+    total = (parts["flags"] + parts["checks"] + 2 * parts["repeats"]
+             + files // per + finished)
+    return total, parts
+
+
 def credit_pause(proj, seconds):
     """Give time back to the session cap.
 

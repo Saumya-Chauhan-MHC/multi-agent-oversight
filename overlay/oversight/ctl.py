@@ -198,14 +198,12 @@ def watch(_argv):
 
 
 def counters_line(c, st):
-    unseen = c.get("unseen_files", 0) // 10
-    total = (c.get("flags_unanswered", 0) + c.get("checks_unanswered", 0)
-             + 2 * c.get("repeat_flags", 0) + unseen)
-    return total, ("outdatedness %d = %d departures x1 + %d unanswered checks x1 + %d repeats x2 + %d "
-                   "(%d unseen edits); your threshold is %d" %
-                   (total, c.get("flags_unanswered", 0), c.get("checks_unanswered", 0),
-                    c.get("repeat_flags", 0), unseen, c.get("unseen_files", 0),
-                    st.get("catchup_threshold", 5)))
+    total, p = align.outdatedness(PROJ, st)
+    per = int(st.get("files_per_point", 10))
+    return total, ("outdatedness %d = %d departures + %d unanswered checks + %d repeats x2 + %d "
+                   "(%d unseen edits, 1 per %d) + %d finished while away; your threshold is %d" %
+                   (total, p["flags"], p["checks"], p["repeats"], p["unseen_files"] // per,
+                    p["unseen_files"], per, p["finished"], st.get("catchup_threshold", 5)))
 
 
 def accept_all(argv):

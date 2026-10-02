@@ -103,6 +103,8 @@ def state(proj):
         n["judgement"] = j and dict(verdict=j.get("verdict"), confidence=j.get("confidence"),
                                     band=j.get("band"), rid=j.get("rid"))
         n["seen"] = n["id"] in seen
+        n["shares_with"] = sorted({o["label"] for o in ns if o["id"] != n["id"]
+                                   and set(o["writes"]) & set(n["writes"])})
         n["new_since_look"] = n.get("started", 0) > last_look
 
     # the items, ordered as B4 asks: lines already said no to, then other flags, then checks,
@@ -164,6 +166,19 @@ def state(proj):
         items.append(dict(kind="unseen", rank=3, caller=who,
                           title="%s: %d files written since your last look" % (label, n),
                           caption="You have not opened this node. Click it to open it.", lines=[]))
+    owners = {}
+    for n in ns:
+        for f in n["writes"]:
+            owners.setdefault(f, []).append(n["label"])
+    pairs = {}
+    for f, who in owners.items():
+        if len(who) > 1:
+            pairs.setdefault(" and ".join(sorted(set(who))[:2]), []).append(os.path.basename(f))
+    for whos, fs in pairs.items():
+        items.append(dict(kind="overlap", rank=3, caller=None,
+                          title="%s both wrote %d file%s" % (whos, len(fs), "" if len(fs) == 1 else "s"),
+                          caption="Shared files: %s. Two subagents writing one file is where parallel "
+                                  "work collides." % ", ".join(sorted(fs)[:6]), lines=[]))
     for n in ns:
         if n["status"] == "done" and n.get("started", 0) > last_look:
             items.append(dict(kind="finished", rank=4, caller=n["id"],
@@ -171,8 +186,7 @@ def state(proj):
                               caption="%d files written." % len(n["writes"]), lines=[]))
     items.sort(key=lambda i: (i["rank"], -(i.get("ts") or 0)))
 
-    total = (c.get("flags_unanswered", 0) + c.get("checks_unanswered", 0)
-             + 2 * c.get("repeat_flags", 0) + unseen_writes // 10)
+    total, parts = align.outdatedness(proj, st)
     return dict(
         waiting=sum(1 for i in items if i["kind"] == "waiting"),
         lines=[dict(id=m["id"], text=m["text"], source=m.get("source"), status=m.get("status"))
@@ -180,8 +194,8 @@ def state(proj):
         settings=dict(involvement=st.get("involvement"), threshold=st.get("catchup_threshold"),
                       surface=st.get("surface_mode", "ask")),
         nodes=ns, items=items,
-        counters=dict(flags=c.get("flags_unanswered", 0), checks=c.get("checks_unanswered", 0),
-                      repeats=c.get("repeat_flags", 0), unseen_files=unseen_writes, total=total,
+        counters=dict(flags=parts["flags"], checks=parts["checks"], repeats=parts["repeats"],
+                      unseen_files=parts["unseen_files"], finished=parts["finished"], total=total,
                       threshold=st.get("catchup_threshold", 5),
                       minutes_since_look=int((align.now_ms() - last_look) / 60000) if last_look else 0),
         judgements=[dict(rid=j.get("rid"), band=j.get("band"), verdict=j.get("verdict"),

@@ -32,6 +32,7 @@ DEFAULT_SETTINGS = {
     # for about 6s per judgement instead of 3.4s, and that time is credited back to the cap.
     "judge_model": "claude-sonnet-5",
     "judge_timeout_s": 45,
+    "files_per_point": 10,      # catch-up: files written in places you have not opened, per point
     "precision_floor": 0.70,    # below this, holds become checks: a false-alarm-prone flagger is worse than none
     "open_dag_on_hold": True,   # the graph opens itself only on a high-confidence departure
     "viewer_port": 4173,

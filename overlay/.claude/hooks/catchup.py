@@ -17,22 +17,10 @@ except Exception:
     sys.exit(0)
 
 st, c = memory.settings(), align.counters(proj)
-
-# unseen files: everything written since the last look, in nodes the user has not opened
-written = 0
-last = c.get("last_look_ts", 0)
-seen = set(c.get("seen_nodes") or [])
-for e in align.load_events(proj):
-    if e.get("ov_ts", 0) <= last or e.get("ov_event") != "pre_tool":
-        continue
-    if e.get("tool_name") in ("Write", "Edit", "MultiEdit") and (e.get("agent_id") or "orchestrator") not in seen:
-        written += 1
-c["unseen_files"] = written
+total, parts = align.outdatedness(proj, st)
+c["unseen_files"] = parts["unseen_files"]
 align.save_counters(proj, c)
 
-unseen_points = written // 10
-total = (c.get("flags_unanswered", 0) + c.get("checks_unanswered", 0)
-         + 2 * c.get("repeat_flags", 0) + unseen_points)
 threshold = int(st.get("catchup_threshold", 5))
 if total < threshold or (align.now_ms() - c.get("last_catchup_ts", 0)) < 60000:
     sys.exit(0)
@@ -40,12 +28,14 @@ if total < threshold or (align.now_ms() - c.get("last_catchup_ts", 0)) < 60000:
 c["last_catchup_ts"] = align.now_ms()
 align.save_counters(proj, c)
 mins = max(0, int((align.now_ms() - c.get("last_look_ts", align.now_ms())) / 60000))
+written = parts["unseen_files"]
 msg = "\n".join([
     "oversight catch up?   since your last look (%d min)" % mins,
     "  %d departures from what you said, not surfaced" % c.get("flags_unanswered", 0),
     "  %d checks you did not answer" % c.get("checks_unanswered", 0),
     "  %d files written in nodes you have not opened" % written,
     "  open the graph   http://localhost:4173/?since=last-look",
+    "  %d subagents finished while you were away" % parts["finished"],
     "  outdatedness %d, your threshold is %d . nothing is paused" % (total, threshold),
 ])
 print(json.dumps({"systemMessage": msg}))
