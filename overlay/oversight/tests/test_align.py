@@ -62,6 +62,11 @@ def check(name, cond, detail=""):
     print(("PASS " if cond else "FAIL ") + name + ("  " + detail if detail else ""))
 
 
+# the suite is stateful by design (answers teach lines, accept_all leaves a standing approval), so
+# it starts from a clean control directory every time
+import shutil
+shutil.rmtree(CTL, ignore_errors=True)
+shutil.rmtree(os.path.join(T, "oversight", "judgements"), ignore_errors=True)
 print("task: %s\nlines: %s\n" % (T, [m["id"] for m in memory.load()]))
 
 # 1. a spawn that contradicts a written rule is held, and "no" denies it and teaches a line
@@ -73,7 +78,7 @@ band, out = gate("Realtime layer",
 check("rule break is held", band == "hold", "band=%s" % band)
 check("hold + no denies the spawn", '"permissionDecision": "deny"' in out)
 check("the user's words become a line", len(memory.load()) == before + 1)
-check("the parent gets the note", os.path.exists(os.path.join(CTL, "inbox", "orchestrator.jsonl")))
+check("the parent gets the note", os.path.exists(os.path.join(CTL, "inbox", align.inbox_key("orchestrator") + ".jsonl")))
 
 # 2. the same decision asked again is not re-asked: it inherits the answer
 band, out = gate("Realtime layer again",
