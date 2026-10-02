@@ -36,6 +36,11 @@ Return ONLY a JSON object, no prose, no code fence, with these fields:
 
 Rules:
 - "departs" requires at least one evidence pair, and every line_id must be one of the user's lines.
+- If your own explanation would say the proposal respects, satisfies or complies with the line, the
+  verdict is "fits". Never return "departs" with reasoning that says the brief is correct.
+- "One subagent per package or component" is SATISFIED by a subagent scoped to exactly one package,
+  one component, one directory or one file. Splitting it further is optional, never required, so a
+  single-component subagent is a fit even if you think a finer split would be nicer.
 - A proposal that MATCHES a line is a fit, never a departure. "one subagent per file or module"
   is satisfied by a subagent that owns exactly one file, and by one that owns exactly one module.
   Never flag a proposal for being compatible with a line.
@@ -102,6 +107,9 @@ def _validate(out, model):
           if isinstance(e, dict) and e.get("line_id") in ids]
     if verdict == "departs" and not ev:
         verdict, conf = "fits", min(conf, 0.3)       # unsupported departure degrades, never holds
+    # a departure whose own suggestion is "accept" is self-contradictory: trust the suggestion
+    if verdict == "departs" and (out.get("suggestion") or {}).get("action") == "accept":
+        verdict, conf, ev = "fits", min(conf, 0.5), []
     sug = out.get("suggestion") or {}
     if sug.get("action") not in ("accept", "modify", "reject"):
         sug = {"action": "accept" if verdict == "fits" else "reject",

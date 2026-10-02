@@ -19,3 +19,9 @@ except Exception:
 if text:
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart",
                                              "additionalContext": text}}))
+else:
+    # No lines means the gate has nothing to align to and will stay silent all session. Say so, or
+    # the tool looks like it is working when it is doing nothing at all.
+    print(json.dumps({"systemMessage":
+                      "oversight: no lines yet, so nothing will be judged this session.\n"
+                      "  run  python3 oversight/ctl.py init  in another terminal, then restart me."}))

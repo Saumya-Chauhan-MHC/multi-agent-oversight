@@ -27,8 +27,11 @@ DEFAULT_SETTINGS = {
     "quick_check_wait": 60,      # q4 follow-up, seconds (unused while checks do not block)
     "hold_band": 0.85,           # departs at or above this holds the spawn
     "check_band": [0.5, 0.65],   # this range, or "no line covers it", asks a quick check
-    "judge_model": "claude-haiku-4-5-20251001",
-    "judge_timeout_s": 25,
+    # Sonnet over Haiku: on live briefs Haiku wrongly held 2 of 4 compliant spawns and never
+    # produced the 0.5-0.65 band the design relies on. Sonnet got 4/4 and 12/12 on the eval,
+    # for about 6s per judgement instead of 3.4s, and that time is credited back to the cap.
+    "judge_model": "claude-sonnet-5",
+    "judge_timeout_s": 45,
     "open_dag_on_hold": True,   # the graph opens itself only on a high-confidence departure
     "viewer_port": 4173,
 }

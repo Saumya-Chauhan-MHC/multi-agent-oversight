@@ -48,6 +48,12 @@ CASES = [
      "before reporting done", "silent"),
     ("one module under 'per file or module' is a FIT", PER_FILE, PARENT,
      "Build the public/ web client module; you own public/ only; run your own tests", "silent"),
+    ("single component subagent under q2 'per package or component'", FULL, PARENT,
+     "You are building the irc component of Huddle. Your scope: irc/ only. start.sh is read-only "
+     "for you. Run your own tests before reporting done", "silent"),
+    ("one component, one directory, nothing else", FULL, PARENT,
+     "You are building the redis mini pub/sub daemon. Your scope: redis/ only. Run your own tests "
+     "before reporting done", "silent"),
     ("division unstated: per-component split", FILES_ONLY, PARENT,
      "Implement the channel sidebar in app/static/sidebar.js; 4 more component subagents planned",
      "check"),

@@ -211,6 +211,8 @@ def counters_line(c, st):
 def status(_argv):
     st, c = memory.settings(), align.counters(PROJ)
     model = memory.load()
+    if not model:
+        print("lines        NONE - run `python3 oversight/ctl.py init` first, or nothing is judged")
     print("lines        %d (%s)" % (len(model), ", ".join(m["id"] for m in model[:8])))
     print("involvement  %s   catch-up threshold %s   surface %s" %
           (st.get("involvement"), st.get("catchup_threshold"), st.get("surface_mode", "ask")))

@@ -67,14 +67,23 @@ def state(proj):
     # In single-terminal mode the question belongs to Claude Code, so we never see the answer
     # directly. A subagent starting after we asked IS the answer, so the item resolves itself
     # instead of claiming forever that the agent is paused.
-    starts = [e.get("ov_ts", 0) for e in align.load_events(proj) if e.get("ov_event") == "subagent_start"]
-    for p in glob.glob(os.path.join(align.ctl(proj), "asked", "*.json")):
+    # One subagent start answers ONE ask, oldest first. Clearing every ask on any start was wrong:
+    # in a burst, one allowed spawn wiped the record of the others still waiting.
+    starts = sorted(e.get("ov_ts", 0) for e in align.load_events(proj)
+                    if e.get("ov_event") == "subagent_start")
+    asks = []
+    for p in sorted(glob.glob(os.path.join(align.ctl(proj), "asked", "*.json"))):
         try:
-            a = json.load(open(p))
+            asks.append((json.load(open(p)), p))
         except Exception:
-            continue
-        if any(t > a.get("ts", 0) for t in starts):
-            os.remove(p)                      # it was allowed and ran
+            pass
+    asks.sort(key=lambda x: x[0].get("ts", 0))
+    used = 0
+    for a, path in asks:
+        later = [t for t in starts[used:] if t > a.get("ts", 0)]
+        if later:
+            used = starts.index(later[0]) + 1
+            os.remove(path)                   # this one was allowed and ran
         else:
             waiting_rids.add(a.get("rid"))
 
