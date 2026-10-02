@@ -123,6 +123,8 @@ python3 oversight/ctl.py declare --kind merge --what "..." --why "..."
 - [docs/CALIBRATION.md](docs/CALIBRATION.md) every decision from one live run, which calls were
   right, which were wrong, what we changed, and the re-test
 - [examples/swe_marathon_slack_clone](examples/swe_marathon_slack_clone) the task used in that run
+- [examples/programbench](examples/programbench) the ProgramBench harness: fetch a task, run it, grade
+  it with the benchmark's hidden tests
 
 ## Also in the box
 
