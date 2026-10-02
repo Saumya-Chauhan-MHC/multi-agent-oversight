@@ -1,266 +1,265 @@
 #!/usr/bin/env python3
 """Terminal control for the oversight tool. Run from the task folder:
 
-  python3 oversight/ctl.py status                  run state, gate mode, pending splits
-  python3 oversight/ctl.py gate on|off             pause every proposed subagent spawn for review
-  python3 oversight/ctl.py recommend on|off        show the pros / cons section on split cards
-  python3 oversight/ctl.py watch                   wait for proposed splits and decide them here
-  python3 oversight/ctl.py pending                 list splits waiting for a decision
-  python3 oversight/ctl.py split <id|all> accept|accept_all|modify|reject|reset [--note T] [--to CP]
-  python3 oversight/ctl.py nodes                   node ids, intents, status
-  python3 oversight/ctl.py checkpoints             checkpoints you can reset to
-  python3 oversight/ctl.py reset <cp> [--note T]   1. reset to a checkpoint (forks a branch)
-  python3 oversight/ctl.py edit <node> [--brief T | --brief-file F] [--launch]
-                                                   2. edit a node's brief and rerun it (forks)
-  python3 oversight/ctl.py tell <node> "<text>"    3. instruction to a running node (no fork)
-  python3 oversight/ctl.py undo <backup-id>        reverse a reset or edit
-  python3 oversight/ctl.py history                 every recorded intervention
+  python3 oversight/ctl.py init                 the five questions, once, before the first prompt
+  python3 oversight/ctl.py lines                the user's lines, as the judge sees them
+  python3 oversight/ctl.py status               run state, counters, anything waiting
+  python3 oversight/ctl.py pending              decisions waiting for an answer
+  python3 oversight/ctl.py answer <rid|all> accept|accept_all|no [--note "..."]
+  python3 oversight/ctl.py watch                wait for decisions and answer them here
+  python3 oversight/ctl.py catchup              print the catch-up line now, and what is behind it
+  python3 oversight/ctl.py caught-up            reset the counters ("I have looked")
+  python3 oversight/ctl.py judgements [N]       what the judge said, most recent last
 
-Every mutating command shows a PREVIEW of what it will undo or touch, then waits for /confirm
-or /cancel (both recorded). --yes skips the prompt. The viewer's buttons call the same code.
+The viewer's buttons write the same files this writes, so a run can be driven from either.
 """
-import sys, os, json, time, argparse, tempfile, subprocess
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import control as C  # noqa: E402
+import sys, os, json, time, argparse, glob
 
-G, Y, R, D, B, X = "\033[32m", "\033[33m", "\033[31m", "\033[2m", "\033[1m", "\033[0m"
-if not sys.stdout.isatty():
-    G = Y = R = D = B = X = ""
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+PROJ = os.path.dirname(HERE)
+import memory, align                                            # noqa: E402
 
+CTL = align.ctl(PROJ)
+PENDING, DECISIONS = os.path.join(CTL, "pending"), os.path.join(CTL, "decisions")
+CHECKS = os.path.join(CTL, "checks")
 
-def bar(title):
-    print(f"{Y}| oversight - PREVIEW  {title}{X}")
-
-
-def row(k, v):
-    print(f"{Y}|{X} {k:<22} {v}")
-
-
-def confirm(args, kind, target, impact):
-    if args.yes:
-        return True
-    print(f"{Y}|{X} {D}/confirm   /cancel{X}")
-    try:
-        a = input("> ").strip().lower()
-    except EOFError:
-        a = ""
-    if a in ("/confirm", "confirm", "y", "yes"):
-        return True
-    C.record_cancel(kind, target, impact, "cancelled at preview")
-    print(f"{D}cancelled; recorded as decision = cancel{X}")
-    return False
-
-
-def lst(xs, n=4):
-    xs = list(xs)
-    return ", ".join(xs[:n]) + (f" +{len(xs) - n} more" if len(xs) > n else "") if xs else "none"
+QUESTIONS = [
+    dict(id="q1", kind="text", prompt="1  rules a subagent must never break",
+         hint="free text, hard constraints; two rules in one answer become two lines",
+         default=""),
+    dict(id="q2", kind="choice", prompt="2  how should the work be divided?",
+         options={"a": "one subagent per package or component",
+                  "b": "one subagent per file or module",
+                  "c": "let the orchestrator decide"}, default="a"),
+    dict(id="q3", kind="choice", prompt="3  how should the work be verified?",
+         options={"a": "each subagent runs its own tests before reporting done",
+                  "b": "tests only at the end, by the orchestrator"}, default="a"),
+    dict(id="q4", kind="choice", prompt="4  when should I stop the agent and ask you?",
+         options={"a": "when a spawn departs from the points in questions 1 to 3",
+                  "b": "never; tell me at catch-up"}, default="a"),
+    dict(id="q5", kind="choice", prompt="5  when should I tell you to catch up?",
+         options={"a": "low: after small changes (3)",
+                  "b": "medium (5)",
+                  "c": "high: only after big changes (8)"}, default="b"),
+]
 
 
-# ---------------------------------------------------------------------------------------------
-def cmd_status(a):
-    st = C.run_state()
-    mode = open(os.path.join(C.OV, "gate_mode")).read().strip() if os.path.exists(os.path.join(C.OV, "gate_mode")) else "off"
-    print(f"session {st['session']}  run {'ACTIVE' if st['active'] else 'not running'}"
-          f"{'  (PAUSED at a split)' if st['paused'] else ''}  last event {st['last_event_age_s']}s ago")
-    print(f"split gate: {B}{mode}{X}   recommendations: {B}{C.flag('recommend_mode')}{X}")
-    for p in C.pending():
-        print(f"  {R}pending{X} {p['rid']}  {p['impact']['parent_label']} -> {p['description']}")
+def hub_files(proj, top=3):
+    """A concrete default for q1: the files most of the work will touch.
+
+    Guessing beats an empty box. Hub-file isolation is also the one structural rule with measured
+    value in parallel coding work, so it is a sensible thing to protect by default.
+    """
+    cands = []
+    for pat in ("__init__.py", "compile.sh", "run.sh", "setup.py", "Makefile", "package.json",
+                "requirements.txt", "schema.sql", "app.py", "server.py", "main.py"):
+        for p in glob.glob(os.path.join(proj, "**", pat), recursive=True):
+            if "/oversight/" in p or "/.claude/" in p or "/node_modules/" in p:
+                continue
+            cands.append(os.path.relpath(p, proj))
+    seen, out = set(), []
+    for c in sorted(cands, key=len):
+        b = os.path.basename(c)
+        if b in seen:
+            continue
+        seen.add(b)
+        out.append(b)
+    return out[:top]
 
 
-def cmd_recommend(a):
-    C.set_flag("recommend_mode", a.state)
-    print(f"recommendations {a.state}: split cards " + ("show" if a.state == "on" else "hide") + " the pros / cons section")
+def init(argv):
+    ap = argparse.ArgumentParser(prog="ctl.py init")
+    ap.add_argument("--defaults", action="store_true", help="take every default, ask nothing")
+    ap.add_argument("--answers", help='JSON, e.g. {"q1":"never edit run.sh","q2":"a"}')
+    a = ap.parse_args(argv)
+
+    preset = json.loads(a.answers) if a.answers else {}
+    hubs = hub_files(PROJ)
+    if hubs:
+        QUESTIONS[0]["default"] = "never edit %s from a subagent" % " or ".join(hubs)
+
+    print("oversight . before work     5 questions . Enter keeps the default")
+    if hubs:
+        print("                            q1's default comes from this repo's hub files")
+    print()
+    answers = {}
+    for q in QUESTIONS:
+        if q["id"] in preset:
+            answers[q["id"]] = str(preset[q["id"]]).strip()
+            print("%s\n    %s  (given)" % (q["prompt"], answers[q["id"]]))
+            continue
+        if a.defaults:
+            answers[q["id"]] = q["default"]
+            print("%s\n    %s  (default)" % (q["prompt"], q["default"]))
+            continue
+        print(q["prompt"])
+        if q["kind"] == "choice":
+            for k, v in q["options"].items():
+                print("    (%s) %s" % (k, v))
+        elif q.get("hint"):
+            print("    %s" % q["hint"])
+        got = input("    [%s] > " % q["default"]).strip()
+        answers[q["id"]] = got or q["default"]
+        print()
+
+    lines = []
+    for q in QUESTIONS:
+        ans = answers[q["id"]]
+        if q["kind"] == "choice":
+            text = q["options"].get(ans, ans)
+            if q["id"] in ("q4", "q5"):
+                continue                                   # about the user's involvement, not the work
+            lines.append(dict(id=q["id"], text=text))
+        else:
+            parts = [p.strip() for p in ans.replace(";", "\n").split("\n") if p.strip()]
+            for i, p in enumerate(parts):
+                lines.append(dict(id="q1%s" % chr(ord("a") + i), text=p))
+    memory.write_init(lines)
+    memory.save_settings(dict(
+        involvement="ask" if answers["q4"].startswith("a") else "never",
+        catchup_threshold={"a": 3, "b": 5, "c": 8}.get(answers["q5"], 5),
+    ))
+    print("saved      oversight/memory/session_model.json   lines %s, in your words" %
+          ", ".join(l["id"] for l in lines))
+    print("injected   into the orchestrator's first prompt:")
+    print("           %s" % memory.i0()[:160])
+    print("the task itself comes from your prompt; nothing else is asked")
 
 
-def cmd_gate(a):
-    open(os.path.join(C.OV, "gate_mode"), "w").write(a.state)
-    print(f"split gate {a.state}: " + ("every proposed subagent spawn will pause for review"
-                                      if a.state == "on" else "spawns proceed without review"))
+def lines_cmd(_argv):
+    for l in memory.as_prompt_lines():
+        print("  " + l)
+    if not memory.load():
+        print("  (no lines yet; run: python3 oversight/ctl.py init)")
 
 
-def show_split(p):
-    im = p["impact"]
-    bar(f"split  {im['parent_label']} -> {p['description']}")
-    row("request", p["rid"])
-    if im.get("stated_plan"):
-        row("parent's stated plan", im["stated_plan"].replace("\n", " ")[:160])
-    so_far = im.get("split_so_far") or []
-    row("split so far", lst(f"{x['label'].split(' (')[0]} [{x['status']}]" for x in so_far) +
-        f"   {D}(children arrive one per message){X}" if so_far else "this is the first child")
-    row("files in scope", lst(im["files_in_scope"]))
-    row("parent output", f"{im['parent_output_count']} files")
-    row("downstream affected", lst(x["label"] for x in im["downstream"]) +
-        (f"   {R}threshold crossed{X}" if len(im["downstream"]) >= 2 else ""))
-    row("other sessions", lst(x["label"] for x in im["cross_session"]))
-    if C.flag("recommend_mode") == "on":
-        row("pros", "(not assessed yet)")
-        row("cons", "(not assessed yet)")
-    row("checkpoint before", im.get("checkpoint_before") or "none")
-    print(f"{Y}|{X} {D}/accept   /accept-all (this parent, until it finishes)   /modify <what to change>   /reject [why]   /reset [checkpoint]{X}")
-    print(f"{Y}|{X} {D}the agent stays paused until you answer{X}")
-
-
-def decide_interactive(p):
-    show_split(p)
-    try:
-        a = input("> ").strip()
-    except EOFError:
+def pending(_argv):
+    ps = sorted(glob.glob(os.path.join(PENDING, "*.json")))
+    cs = sorted(glob.glob(os.path.join(CHECKS, "*.json")))
+    if not ps and not cs:
+        print("nothing waiting")
         return
-    verb, _, rest = a.lstrip("/").partition(" ")
-    verb = {"a": "accept", "m": "modify", "r": "reject", "accept-all": "accept_all", "aa": "accept_all"}.get(verb, verb)
-    if verb not in ("accept", "accept_all", "modify", "reject", "reset"):
-        print("not a decision; still pending"); return
-    rec = C.decide(p["rid"], verb, note=rest if verb != "reset" else "", reset_to=(rest or None) if verb == "reset" else None)
-    print(f"{G}recorded{X}: split {p['rid']} decision = {rec['decision']}")
-
-
-def cmd_watch(a):
-    print(f"{D}watching for proposed splits (Ctrl-C to stop). Gate must be on: ctl.py gate on{X}")
-    seen = set()
-    try:
-        while True:
-            for p in C.pending():
-                if p["rid"] not in seen and os.path.exists(os.path.join(C.PENDING, p["rid"] + ".json")):
-                    seen.add(p["rid"])
-                    print("\a")
-                    decide_interactive(p)
-            time.sleep(1)
-    except KeyboardInterrupt:
+    for p in cs:
+        r = json.load(open(p))
+        print("  %s  [check, nothing is blocked]  %s -> %s" % (r["rid"], r["parent_label"], r["child"]))
+    for p in ps:
+        r = json.load(open(p))
+        print("  %s  [%s]  %s -> %s" % (r["rid"], r["band"], r["parent_label"], r["child"]))
+        print(align.notice_text(r["judgement"], r["band"], r["caller"]))
         print()
 
 
-def cmd_pending(a):
-    ps = C.pending()
-    if not ps:
-        print("no splits waiting"); return
-    for p in ps:
-        show_split(p); print()
-
-
-def cmd_split(a):
-    ps = C.pending() if a.rid == "all" else [p for p in C.pending() if p["rid"].startswith(a.rid)]
-    if not ps:
-        print("no matching pending split"); return
-    for p in ps:
-        rec = C.decide(p["rid"], a.decision, note=a.note or "", reset_to=a.to)
-        print(f"{G}recorded{X}: {p['rid']}  {p['description']}  decision = {rec['decision']}")
-
-
-def cmd_nodes(a):
-    nodes, _ = C.build()
-    for k, n in nodes.items():
-        print(f"  {k[:18]:<20} {n['status']:<9} {('orchestrator' if n['main'] else n['intent'])[:40]:<42} "
-              f"wrote {len(n['writes'])}")
-
-
-def cmd_checkpoints(a):
-    for c in C.checkpoints()[-a.n:]:
-        t = time.strftime("%H:%M:%S", time.localtime((c["ts"] or 0) / 1000))
-        print(f"  {c['id']:<6} {t}  {c['kind']:<9} {(c['file'] or c.get('label') or ''):<46} {c['agent'][:12]}")
-
-
-def cmd_reset(a):
-    pv = C.preview_reset(a.target)
-    bar(f"reset -> {a.target}")
-    row("to", pv["to"])
-    for d in pv["discards"]:
-        row("discards", f"{d['node']}: {lst(d['files'], 3)}")
-    row("nodes back to pending", lst(pv["nodes_back_to_pending"]))
-    row("files restored", f"{pv['files_restored']}   deleted: {pv['files_deleted']}")
-    if pv["unrestorable"]:
-        row(f"{R}cannot restore{X}", lst(pv["unrestorable"]))
-    row("downstream affected", lst(pv["downstream"]) + (f"   {R}threshold crossed{X}" if pv["threshold"] else ""))
-    if pv["run"]["active"] and not pv["run"]["paused"]:
-        row(f"{R}warning{X}", "a run is active; stop it or reset while it is paused at a split")
-    impact = {k: pv[k] for k in ("to", "files_restored", "files_deleted", "downstream", "threshold")}
-    if confirm(a, "reset", a.target, impact):
-        rec = C.apply_reset(a.target, a.note or "", force=a.force)
-        print(f"Forked {rec['branch']} at {a.target}. {rec['applied']}. Backup: {rec['backup']}")
-        print(f"{D}oversight: recorded human reset, {rec['checkpoint_before']} -> {rec['checkpoint_after']}, decision = confirm{X}")
-
-
-def cmd_edit(a):
-    nodes, _ = C.build()
-    k = C.find_node(nodes, a.node)
-    if not k:
-        print(f"no such node: {a.node}  (see: ctl.py nodes)"); return
-    brief = a.brief or (open(a.brief_file).read() if a.brief_file else None)
-    if brief is None:
-        with tempfile.NamedTemporaryFile("w+", suffix=".md", delete=False) as t:
-            t.write(nodes[k]["prompt"]); tp = t.name
-        subprocess.call([os.environ.get("EDITOR", "vi"), tp])
-        brief = open(tp).read()
-    pv = C.preview_edit(k, brief)
-    bar(f"rerun {pv['node_label']} with edited brief")
-    row("discards", f"{pv['discards_n']} files: {lst(pv['discards'], 3)}")
-    row("downstream affected", lst(pv["downstream"]) + (f"   {R}threshold crossed{X}" if pv["threshold"] else ""))
-    row("untouched", lst(pv["untouched_siblings"]))
-    row("delivered via", "the running orchestrator (it re-spawns the node)" if pv["route"] == "orchestrator"
-        else "a standalone rerun (script written; --launch to start it)")
-    for w in pv["warnings"]:
-        row(f"{R}warning{X}", w)
-    impact = {x: pv[x] for x in ("discards_n", "downstream", "threshold", "route")}
-    if confirm(a, "edit_rerun", k, impact):
-        rec = C.apply_edit(k, brief, a.note or "", launch=a.launch, force=a.force)
-        print(f"{pv['node_label']}: output reverted ({rec['applied']}), rerun via {rec['route']}."
-              + (f" Script: {rec.get('rerun_script')}" if rec.get("rerun_script") else ""))
-
-
-def cmd_tell(a):
-    pv = C.preview_tell(a.node, a.text)
-    bar(f"instruction -> {pv['node_label']} ({pv['status']})")
-    row("files in scope", lst(pv["files_in_scope"]))
-    row("downstream affected", lst(pv["downstream"]))
-    for w in pv["warnings"]:
-        row(f"{R}warning{X}", w)
-    if not pv["deliverable"]:
+def answer(argv):
+    ap = argparse.ArgumentParser(prog="ctl.py answer")
+    ap.add_argument("rid")
+    ap.add_argument("decision", choices=["accept", "accept_all", "no"])
+    ap.add_argument("--note", default="")
+    a = ap.parse_args(argv)
+    os.makedirs(DECISIONS, exist_ok=True)
+    rids = ([os.path.basename(p)[:-5] for p in glob.glob(os.path.join(PENDING, "*.json"))]
+            if a.rid == "all" else [a.rid])
+    if not rids:
+        print("nothing waiting")
         return
-    if confirm(a, "instruction", pv["node"], {"files_in_scope": pv["files_in_scope"]}):
-        C.apply_tell(pv["node"], a.text, a.note or "")
-        print(f"Queued for {pv['node_label']}; it will see it on its next tool call.")
+    for rid in rids:
+        json.dump(dict(answer=a.decision, note=a.note, ts=align.now_ms()),
+                  open(os.path.join(DECISIONS, rid + ".json"), "w"))
+        print("answered %s: %s%s" % (rid, a.decision, (" - " + a.note) if a.note else ""))
+    align.reset_look(PROJ, "answered a notice")
 
 
-def cmd_undo(a):
-    n = C.undo(a.backup)
-    print(f"restored {n} files from backup {a.backup}")
+def watch(_argv):
+    print("waiting for decisions; ctrl-c to stop")
+    seen = set()
+    while True:
+        for p in sorted(glob.glob(os.path.join(PENDING, "*.json"))):
+            rid = os.path.basename(p)[:-5]
+            if rid in seen:
+                continue
+            seen.add(rid)
+            r = json.load(open(p))
+            print()
+            print(align.notice_text(r["judgement"], r["band"], r["caller"]))
+            if r["band"] != "hold":
+                continue
+            print("  1. yes   2. yes, and don't ask again for this parent   3. no, tell the parent")
+            try:
+                c = input("  > ").strip()
+            except (EOFError, KeyboardInterrupt):
+                return
+            dec = {"1": "accept", "2": "accept_all", "3": "no"}.get(c, "accept")
+            note = input("  note to the parent > ").strip() if dec == "no" else ""
+            json.dump(dict(answer=dec, note=note, ts=align.now_ms()),
+                      open(os.path.join(DECISIONS, rid + ".json"), "w"))
+            align.reset_look(PROJ, "answered a notice")
+            print("  recorded")
+        time.sleep(0.5)
 
 
-def cmd_history(a):
-    for r in C.interventions():
-        t = time.strftime("%H:%M:%S", time.localtime(r["ov_ts"] / 1000))
-        print(f"  {t}  {r['kind']:<11} {r['decision']:<27} proposed by {r['initiated_by']:<5} decided by {r.get('decided_by','human'):<5} "
-              f"{str(r.get('child') or r.get('node_label') or r['target'])[:36]:<38} "
-              f"{r['checkpoint_before']} -> {r['checkpoint_after']}")
+def counters_line(c, st):
+    unseen = c.get("unseen_files", 0) // 10
+    total = (c.get("flags_unanswered", 0) + c.get("checks_unanswered", 0)
+             + 2 * c.get("repeat_flags", 0) + unseen)
+    return total, ("outdatedness %d = %d departures x1 + %d unanswered checks x1 + %d repeats x2 + %d "
+                   "(%d unseen edits); your threshold is %d" %
+                   (total, c.get("flags_unanswered", 0), c.get("checks_unanswered", 0),
+                    c.get("repeat_flags", 0), unseen, c.get("unseen_files", 0),
+                    st.get("catchup_threshold", 5)))
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    sp = ap.add_subparsers(dest="cmd", required=True)
-    sp.add_parser("status").set_defaults(f=cmd_status)
-    p = sp.add_parser("gate"); p.add_argument("state", choices=["on", "off"]); p.set_defaults(f=cmd_gate)
-    p = sp.add_parser("recommend"); p.add_argument("state", choices=["on", "off"]); p.set_defaults(f=cmd_recommend)
-    sp.add_parser("watch").set_defaults(f=cmd_watch)
-    sp.add_parser("pending").set_defaults(f=cmd_pending)
-    p = sp.add_parser("split"); p.add_argument("rid"); p.add_argument("decision", choices=["accept", "accept_all", "modify", "reject", "reset"])
-    p.add_argument("--note"); p.add_argument("--to"); p.set_defaults(f=cmd_split)
-    sp.add_parser("nodes").set_defaults(f=cmd_nodes)
-    p = sp.add_parser("checkpoints"); p.add_argument("-n", type=int, default=25); p.set_defaults(f=cmd_checkpoints)
-    for name, fn in (("reset", cmd_reset),):
-        p = sp.add_parser(name); p.add_argument("target"); p.add_argument("--note"); p.add_argument("--yes", action="store_true")
-        p.add_argument("--force", action="store_true"); p.set_defaults(f=fn)
-    p = sp.add_parser("edit"); p.add_argument("node"); p.add_argument("--brief"); p.add_argument("--brief-file")
-    p.add_argument("--launch", action="store_true"); p.add_argument("--note"); p.add_argument("--yes", action="store_true")
-    p.add_argument("--force", action="store_true"); p.set_defaults(f=cmd_edit)
-    p = sp.add_parser("tell"); p.add_argument("node"); p.add_argument("text"); p.add_argument("--note")
-    p.add_argument("--yes", action="store_true"); p.set_defaults(f=cmd_tell)
-    p = sp.add_parser("undo"); p.add_argument("backup"); p.set_defaults(f=cmd_undo)
-    sp.add_parser("history").set_defaults(f=cmd_history)
-    a = ap.parse_args()
-    try:
-        a.f(a)
-    except (ValueError, RuntimeError) as e:
-        print(f"{R}{e}{X}"); sys.exit(1)
+def status(_argv):
+    st, c = memory.settings(), align.counters(PROJ)
+    model = memory.load()
+    print("lines        %d (%s)" % (len(model), ", ".join(m["id"] for m in model[:8])))
+    print("involvement  %s   catch-up threshold %s   surface %s" %
+          (st.get("involvement"), st.get("catchup_threshold"), st.get("surface_mode", "ask")))
+    tot, why = counters_line(c, st)
+    print("counters     %s" % why)
+    ps = glob.glob(os.path.join(PENDING, "*.json"))
+    print("waiting      %d" % len(ps))
+    js = sorted(glob.glob(os.path.join(align.ov(PROJ), "judgements", "*.json")))
+    bands = {}
+    for p in js:
+        try:
+            bands[json.load(open(p))["band"]] = bands.get(json.load(open(p))["band"], 0) + 1
+        except Exception:
+            pass
+    print("judgements   %d  %s" % (len(js), bands))
 
+
+def catchup(_argv):
+    st, c = memory.settings(), align.counters(PROJ)
+    tot, why = counters_line(c, st)
+    mins = max(0, int((align.now_ms() - c.get("last_look_ts", align.now_ms())) / 60000))
+    print("oversight catch up?   since your last look (%d min)" % mins)
+    print("  %d departures from what you said, not surfaced" % c.get("flags_unanswered", 0))
+    print("  %d checks you did not answer" % c.get("checks_unanswered", 0))
+    print("  open the graph   http://localhost:4173/?since=last-look")
+    print("  %s . nothing is paused" % why)
+
+
+def caught_up(_argv):
+    align.reset_look(PROJ, "caught up")
+    print("counters reset; last look is now")
+
+
+def judgements(argv):
+    n = int(argv[0]) if argv else 10
+    for p in sorted(glob.glob(os.path.join(align.ov(PROJ), "judgements", "*.json")))[-n:]:
+        j = json.load(open(p))
+        print("  %-6s %-9s %.2f  %-28s -> %-28s %s" %
+              (j.get("band"), j.get("verdict"), j.get("confidence", 0),
+               str(j.get("parent_label"))[:28], str(j.get("child"))[:28],
+               ",".join(sorted({e.get("line_id") for e in (j.get("evidence") or [])}))))
+
+
+CMDS = dict(init=init, lines=lines_cmd, status=status, pending=pending, answer=answer,
+            watch=watch, catchup=catchup, judgements=judgements)
+CMDS["caught-up"] = caught_up
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) < 2 or sys.argv[1] not in CMDS:
+        print(__doc__)
+        sys.exit(1)
+    CMDS[sys.argv[1]](sys.argv[2:])

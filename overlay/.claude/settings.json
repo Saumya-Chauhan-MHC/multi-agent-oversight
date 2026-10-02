@@ -6,6 +6,10 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record.py\" session_start"
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/inject.py\""
           }
         ]
       }
@@ -20,6 +24,10 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/cap.py\" warn"
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/note_capture.py\""
           }
         ]
       }
@@ -47,7 +55,7 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/gate.py\"",
-            "timeout": 86400
+            "timeout": 3600
           }
         ]
       }
@@ -86,6 +94,11 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record.py\" subagent_stop"
+          },
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/catchup.py\"",
+            "timeout": 30
           }
         ]
       }

@@ -1,31 +1,25 @@
 #!/usr/bin/env python3
-"""Split gate (PreToolUse, matcher Agent|Task).
+"""Alignment gate (PreToolUse, matcher Agent|Task).
 
-Runs on every proposed subagent spawn.
+Runs on every proposed subagent spawn, the orchestration decision we can always see.
 
-  Always   the split's forward impact is computed and recorded as a `split_proposed` event, so
-           the viewer can surface it whether or not the run is paused.
-  Gate on  (oversight/gate_mode = "on") the spawn is also PAUSED until a human decides, from the
-           viewer or `python3 oversight/ctl.py`. The agent is genuinely blocked: this hook does not
-           return until a decision file appears. It never proceeds on its own; if no decision ever
-           arrives it denies the spawn.
+  1. Group it.   A parent proposing nine lexers in one plan is ONE decision; later children of the
+                 same decision inherit the first answer instead of asking again.
+  2. Judge it.   One `claude -p` call against the user's own lines (oversight/judge.py).
+  3. Route it.   departs + high confidence  -> hold the spawn and ask
+                 nothing the user said covers it -> tell them, do not hold
+                 fits -> silent, the node just gets its mark
 
-Decisions:
-  accept       the hook returns nothing and the spawn proceeds
-  accept_all   as accept, and every further spawn from the same parent proceeds without pausing
-               until that parent finishes (a standing approval the human chose explicitly)
-  modify       denied; the agent reads the human's note as the reason and re-plans
-  reject       denied; the agent is told not to run it
-  reset        the workspace is restored to a checkpoint first, then the spawn is denied with why
+An answer becomes a new line in the user's words, and a note goes back to the parent.
 
-Agents propose a split one child per message (the last run: nine lexers over 146 s), so a human
-deciding the first child has not seen the rest. The request therefore carries the parent's stated
-plan (the text it wrote just before spawning) and the children accepted so far.
+Two surfaces, chosen by `surface_mode` in oversight/memory/settings.json:
+  ask   Claude Code's own prompt carries the question (one terminal). Default.
+  file  the decision arrives as a file, written by ctl.py, the viewer, or a test.
 
-Time spent paused is added to the session's cap start, so waiting for a human is not charged to
-the agent.
+Everything fails open: no session model, no judge, a crash or a timeout and the spawn proceeds with
+the reason recorded. The tool must never be why a run dies.
 """
-import sys, json, os, time, glob
+import sys, json, os, time, hashlib
 
 try:
     data = json.load(sys.stdin)
@@ -33,179 +27,174 @@ except Exception:
     sys.exit(0)
 if data.get("tool_name") not in ("Agent", "Task"):
     sys.exit(0)
-root = os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
-ov = os.path.join(root, "oversight")
+
+PROJ = os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
+OV = os.path.join(PROJ, "oversight")
+CTL = os.path.join(OV, "control")
+PENDING, DECISIONS = os.path.join(CTL, "pending"), os.path.join(CTL, "decisions")
+CHECKS = os.path.join(CTL, "checks")      # told, not waiting: nothing is blocked on these
+SLOT = os.path.join(CTL, "slot_open")
+ANSWERED = os.path.join(CTL, "answered.jsonl")
+sys.path.insert(0, OV)
 
 
-def read(p, default=""):
-    try:
-        return open(p).read().strip()
-    except Exception:
-        return default
-
-
-gate_on = read(os.path.join(ov, "gate_mode"), "off") == "on"
-try:
-    no = int(read(os.path.join(ov, "session_no.txt"), "1"))
-except Exception:
-    no = 1
-
-
-# Fail closed. Claude Code lets a tool call proceed when its hook crashes or is killed (tested: a
-# hook killed by its timeout let the spawn run). With the gate on, an unreviewed spawn slipping
-# through is the failure we most want to avoid, so any unexpected error denies instead.
-def _fail_closed(exc_type, exc, tb):
-    if gate_on:
-        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
-              "permissionDecisionReason": f"The oversight gate hit an internal error ({exc_type.__name__}: {exc}) "
-              "and held this spawn rather than let it through unreviewed. Tell the human; do not retry "
-              "until they have looked."}}))
+def allow():
     sys.exit(0)
 
 
-sys.excepthook = _fail_closed
+def out(obj):
+    print(json.dumps(obj))
+    sys.exit(0)
 
-sys.path.insert(0, ov)
-import control  # noqa: E402
+
+def deny(reason, sysmsg=None):
+    o = {"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                "permissionDecision": "deny", "permissionDecisionReason": reason}}
+    if sysmsg:
+        o["systemMessage"] = sysmsg
+    out(o)
+
+
+def ask(question, sysmsg):
+    out({"systemMessage": sysmsg,
+         "hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                "permissionDecision": "ask", "permissionDecisionReason": question}})
+
+
+try:
+    import memory, judge, align
+except Exception:
+    allow()
 
 ti = data.get("tool_input") or {}
-nodes, live = control.build()
-caller = (live.get(data.get("agent_id")) if data.get("agent_id") else None) or f"main:{no}"
-desc, prompt = ti.get("description") or "", ti.get("prompt") or ""
+desc = (ti.get("description") or "").strip()
+prompt = (ti.get("prompt") or "").strip()
+if not desc and not prompt:
+    allow()
 
+st = memory.settings()
+model = memory.load()
+if not model:
+    allow()                                   # init never run: nothing to align to
 
-def stated_plan():
-    """The text the parent wrote in or just before the message that proposes this spawn."""
-    tp = data.get("transcript_path") or ""
-    if data.get("agent_id") and tp.endswith(".jsonl"):
-        hits = glob.glob(os.path.join(tp[:-6], "subagents", f"agent-{data['agent_id']}*.jsonl"))
-        tp = hits[0] if hits else ""
-    if not tp or not os.path.exists(tp):
-        return ""
-    try:
-        msgs = [json.loads(l) for l in open(tp) if l.strip()]
-    except Exception:
-        return ""
-    tid = data.get("tool_use_id")
-    idx = len(msgs)
-    for i, m in enumerate(msgs):
-        for c in ((m.get("message") or {}).get("content") or []):
-            if isinstance(c, dict) and c.get("type") == "tool_use" and c.get("id") == tid:
-                idx = i + 1
-    texts = []
-    for m in reversed(msgs[max(0, idx - 6):idx]):
-        if m.get("type") != "assistant":
-            continue
-        t = " ".join(c.get("text", "") for c in ((m.get("message") or {}).get("content") or [])
-                     if isinstance(c, dict) and c.get("type") == "text").strip()
-        if t:
-            texts.append(t)
-        if len(texts) >= 2:
-            break
-    return "\n\n".join(reversed(texts))[:1200]
+for d in (PENDING, DECISIONS, CHECKS, os.path.join(OV, "judgements")):
+    os.makedirs(d, exist_ok=True)
 
+# ---------------------------------------------------------------- which decision this spawn is part of
+caller, parent_status = align.parent_status(PROJ, data.get("agent_id"))
+fam = align.brief_family(prompt)
+dkey = hashlib.sha256(json.dumps([caller, fam], sort_keys=True).encode()).hexdigest()[:12]
+rid = "%s-%d" % (dkey, int(time.time() * 1000))
 
-impact = control.split_impact(caller, desc, prompt)
-impact["stated_plan"] = stated_plan()
-impact["split_so_far"] = [dict(key=k, label=control.label(nodes, k), status=nodes[k]["status"])
-                          for k in nodes if nodes[k].get("parent") == caller]
-# pros / cons (spec: for splits only). Always computed and recorded; shown when recommend_mode is on.
-impact.update(control.recommendations(caller, prompt, impact["files_in_scope"],
-                                      [x["key"] for x in impact["split_so_far"]], impact["stated_plan"]))
+prior = align.answered_for(ANSWERED, dkey)
+if prior and prior.get("answer") in ("accept", "accept_all"):
+    allow()                                   # same decision, already accepted: no judge, no question
+if prior and prior.get("answer") == "no":
+    deny("[oversight] You already declined this split. The user's note: %s" % prior.get("note", ""),
+         "oversight: same decision you declined; not asking again")
+if os.path.exists(os.path.join(CTL, "standing_%s.json" % caller)):
+    allow()                                   # "yes, and don't ask again for this parent"
 
-# impact is always surfaced: record it whether or not the run will pause
-with open(os.path.join(ov, "events.jsonl"), "a") as f:
-    f.write(json.dumps(dict(ov_event="split_proposed", ov_ts=control.now_ms(), ov_session_no=no,
-                            session_id=data.get("session_id", "control"), agent_id=data.get("agent_id"),
-                            tool_use_id=data.get("tool_use_id"), description=desc, caller=caller,
-                            gated=gate_on, impact=impact)) + "\n")
-if not gate_on:
-    sys.exit(0)
+# ---------------------------------------------------------------- judge it
+# The brief itself is the evidence. We do not hand the judge a scraped file list: a path can
+# appear in a sentence that says NOT to touch it, and a scraped list turns that into a flag.
+decision = dict(kind="spawn", name=desc, task=prompt[:1200])
+t0 = time.time()
+verdict = judge.judge_decision(OV, decision, parent_status, model=model, settings=st)
+judge_s = round(time.time() - t0, 1)
+band = judge.band(verdict, st, model=model, dimension="division")
 
-# do not pause a call the time cap is about to deny anyway
-try:
-    cap = int(read(os.path.join(ov, "cap_minutes"), "0"))
-    start = int(read(os.path.join(ov, f"cap_start_{no}.txt"), str(int(time.time()))))
-    paused = int(read(os.path.join(ov, f"paused_{no}.txt"), "0"))
-    if cap > 0 and cap * 60 - (int(time.time()) - start - paused) <= 0:
-        sys.exit(0)
-except Exception:
-    pass
+jrec = dict(rid=rid, dkey=dkey, ts=align.now_ms(), caller=caller,
+            parent_label=parent_status["name"], child=desc, files=align.paths_in(prompt),
+            judge_s=judge_s, band=band,
+            **{k: verdict.get(k) for k in ("verdict", "covered", "governed_by", "confidence", "evidence",
+                                           "precedent", "suggestion", "if_accepted", "source")})
+json.dump(jrec, open(os.path.join(OV, "judgements", rid + ".json"), "w"), indent=1)
+align.append_event(PROJ, dict(ov_event="judgement", **jrec))
+align.credit_pause(PROJ, judge_s)             # the judge's latency is our overhead, not the agent's
 
-# a standing approval the human chose explicitly: "accept all further spawns from this parent"
-sa = os.path.join(control.CTL, f"standing_{control._safe(caller)}.json")
-if os.path.exists(sa):
-    par = nodes.get(caller)
-    if par and par["status"] == "running":
-        control.record("split", "agent", caller, impact, "accept (standing approval)",
-                       control.latest_checkpoint(), control.latest_checkpoint(),
-                       "covered by the human's accept-all for this parent", dict(parent=caller, child=desc))
-        sys.exit(0)
-    try:
-        os.remove(sa)          # the parent finished; the approval does not outlive it
-    except Exception:
-        pass
+if band == "silent":
+    allow()
 
-rid = f"s{no}-{int(time.time() * 1000)}-{os.getpid()}"
-req = dict(rid=rid, ts=control.now_ms(), session=no, caller=caller, description=desc,
-           prompt=prompt, subagent_type=ti.get("subagent_type"), impact=impact)
-pp = os.path.join(control.PENDING, f"{rid}.json")
-json.dump(req, open(pp, "w"), indent=1)
+req = dict(rid=rid, dkey=dkey, ts=align.now_ms(), caller=caller, parent_label=parent_status["name"],
+           child=desc, prompt=prompt[:2000], band=band, judgement=jrec)
+# A check never blocks, so it does not belong in `pending`, which means "a spawn is waiting on you".
+json.dump(req, open(os.path.join(CHECKS if band == "check" else PENDING, rid + ".json"), "w"), indent=1)
 
-# Wait for a human. There is no auto-proceed: only a decision releases the spawn. The deadline sits
-# just under the hook's own timeout in settings.json (86400 s), and reaching it DENIES the spawn.
-deadline = int(read(os.path.join(ov, "gate_timeout"), "86000") or 86000)
-dp = os.path.join(control.DECISIONS, f"{rid}.json")
+# The spawn runs and the user is simply told; unanswered, it becomes a catch-up item, which is what
+# the SSOT asks for when a check goes unanswered.
+if band == "check":
+    align.bump(PROJ, "checks_unanswered", 1)
+    out({"systemMessage": align.notice_text(jrec, "check", caller) +
+         "\n  nothing is paused; answer later in the viewer, or ignore it"})
+
+# ---------------------------------------------------------------- hold: one question at a time
+wait_start = time.time()
+while not align.slot_free(SLOT):
+    if time.time() - wait_start > int(st.get("slot_wait_s", 900)):
+        break
+    time.sleep(0.5)
+    a = align.answered_for(ANSWERED, dkey)    # an answer to a sibling may have covered this one
+    if a:
+        align.credit_pause(PROJ, time.time() - wait_start)
+        if a.get("answer") in ("accept", "accept_all"):
+            allow()
+        deny("[oversight] You declined this split. Note: %s" % a.get("note", ""))
+open(SLOT, "w").write(rid)
+align.credit_pause(PROJ, time.time() - wait_start)
+
+if st.get("surface_mode", "ask") == "ask":
+    # Claude Code's own prompt asks. Its answer reaches us as the tool running or not; the user's
+    # note on a "no" is picked up from their next message by note_capture.py.
+    json.dump(dict(rid=rid, dkey=dkey, caller=caller, child=desc, parent=parent_status["name"],
+                   if_accepted=verdict.get("if_accepted"),
+                   lines=sorted({e.get("line_id") for e in verdict["evidence"] if e.get("line_id")}),
+                   suggestion=verdict.get("suggestion")),
+              open(os.path.join(CTL, "awaiting_answer.json"), "w"), indent=1)
+    ask("Let this subagent start?  (%s)" % (desc or "unnamed"),
+        align.notice_text(jrec, "hold", caller))
+
+# file mode: the decision arrives as a file from ctl.py, the viewer, or a test
+dp = os.path.join(DECISIONS, rid + ".json")
 t0 = time.time()
 dec = None
-while time.time() - t0 < deadline:
+while time.time() - t0 < int(st.get("decision_timeout_s", 1800)):
     if os.path.exists(dp):
         try:
             dec = json.load(open(dp))
             break
         except Exception:
             pass
-    time.sleep(0.5)
-waited = int(time.time() - t0)
-
-pf = os.path.join(ov, f"paused_{no}.txt")
-try:
-    total = int(read(pf, "0") or 0) + waited      # read BEFORE opening for write, which truncates
-    open(pf, "w").write(str(total))
-except Exception:
-    pass
-try:
-    os.remove(pp)
-except Exception:
-    pass
-
-
-def deny(reason):
-    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                             "permissionDecision": "deny",
-                                             "permissionDecisionReason": reason}}))
-    sys.exit(0)
-
+    time.sleep(0.4)
+align.credit_pause(PROJ, time.time() - t0)
+align.clear(SLOT)
+align.clear(os.path.join(PENDING, rid + ".json"))
 
 if dec is None:
-    control.record("split", "agent", caller, impact, "no decision (denied)", control.latest_checkpoint(),
-                   control.latest_checkpoint(), f"no human decision within {deadline}s",
-                   dict(request=rid, parent=caller, child=desc))
-    deny("This spawn was held for human review and no decision arrived, so it was not started. "
-         "Continue without it, or propose it again later.")
+    align.bump(PROJ, "flags_unanswered", 1)
+    allow()                                   # nobody in reach: record it, do not strand the run
 
-d, note = dec.get("decision"), (dec.get("note") or "").strip()
-if d in ("accept", "accept_all"):
-    sys.exit(0)
-if d == "modify":
-    deny("A human reviewing this split asked for changes before it runs:\n" + (note or "(no details)") +
-         "\nRevise the delegation accordingly and re-issue the Agent call, or do the work yourself if that is what they asked.")
-if d == "reject":
-    deny("A human reviewing this split rejected it" + (f": {note}" if note else ".") +
-         " Do not spawn this subagent; continue without it.")
-if d == "reset":
-    deny(f"A human reset the workspace to checkpoint {dec.get('reset_to') or 'an earlier point'}: every file "
-         "changed after that point was restored to its earlier state, so recent edits are gone. "
-         "Re-check the workspace and re-plan from the restored state before delegating."
-         + (f" Their note: {note}" if note else ""))
-sys.exit(0)
+answer = dec.get("answer", "accept")
+usernote = (dec.get("note") or "").strip()
+align.record_answer(ANSWERED, dict(dkey=dkey, rid=rid, answer=answer, note=usernote, ts=align.now_ms()))
+lines = sorted({e.get("line_id") for e in verdict["evidence"] if e.get("line_id")})
+
+if answer in ("accept", "accept_all"):
+    if verdict.get("if_accepted"):
+        memory.append_answer(verdict["if_accepted"], lines, source="answer (accept)", rid=rid)
+    if answer == "accept_all":
+        json.dump(dict(parent=caller, ts=align.now_ms()),
+                  open(os.path.join(CTL, "standing_%s.json" % caller), "w"))
+    align.record_intervention(PROJ, caller, desc, answer, usernote, jrec)
+    allow()
+
+# "no, tell the parent": the child never starts, the note reaches the parent, and the user's own
+# words become the line every later judgement is measured against.
+memory.append_answer(usernote or (verdict["suggestion"].get("note") or "do not do this"),
+                     lines, source="answer (no)", rid=rid)
+align.send_to_agent(PROJ, caller,
+                    "[oversight] The user did not allow your spawn \"%s\" as proposed.\n"
+                    "Their note: %s\nRe-plan accordingly." % (desc, usernote or "see your brief"))
+align.record_intervention(PROJ, caller, desc, "no", usernote, jrec)
+deny("[oversight] The user did not allow this spawn. Their note: %s" % (usernote or "re-plan"),
+     "oversight: spawn declined; your note was sent to %s" % parent_status["name"])
