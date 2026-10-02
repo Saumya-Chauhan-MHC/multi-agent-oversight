@@ -186,6 +186,18 @@ def state(proj):
                               caption="%d files written." % len(n["writes"]), lines=[]))
     items.sort(key=lambda i: (i["rank"], -(i.get("ts") or 0)))
 
+    # The same decision, judged again, is one thing to answer, not a stack of identical cards: an
+    # agent that retries a declined spawn would otherwise bury the rest of the list.
+    collapsed, by_key = [], {}
+    for i in items:
+        k = (i.get("kind"), i.get("dkey") or i.get("title"))
+        if k in by_key:
+            by_key[k]["repeats"] = by_key[k].get("repeats", 1) + 1
+            continue
+        by_key[k] = i
+        collapsed.append(i)
+    items = collapsed
+
     total, parts = align.outdatedness(proj, st)
     return dict(
         waiting=sum(1 for i in items if i["kind"] == "waiting"),
@@ -199,6 +211,7 @@ def state(proj):
                       threshold=st.get("catchup_threshold", 5),
                       minutes_since_look=int((align.now_ms() - last_look) / 60000) if last_look else 0),
         judgements=[dict(rid=j.get("rid"), band=j.get("band"), verdict=j.get("verdict"),
+                         caller=j.get("caller"), kind=j.get("kind", "spawn"),
                          confidence=j.get("confidence"), parent=j.get("parent_label"),
                          child=j.get("child"), ts=j.get("ts"),
                          lines=sorted({e.get("line_id") for e in (j.get("evidence") or [])}))

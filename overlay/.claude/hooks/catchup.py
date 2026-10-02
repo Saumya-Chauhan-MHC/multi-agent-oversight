@@ -25,8 +25,6 @@ threshold = int(st.get("catchup_threshold", 5))
 if total < threshold or (align.now_ms() - c.get("last_catchup_ts", 0)) < 60000:
     sys.exit(0)
 
-c["last_catchup_ts"] = align.now_ms()
-align.save_counters(proj, c)
 mins = max(0, int((align.now_ms() - c.get("last_look_ts", align.now_ms())) / 60000))
 written = parts["unseen_files"]
 msg = "\n".join([
@@ -38,4 +36,7 @@ msg = "\n".join([
     "  %d subagents finished while you were away" % parts["finished"],
     "  outdatedness %d, your threshold is %d . nothing is paused" % (total, threshold),
 ])
-print(json.dumps({"systemMessage": msg}))
+align.queue_notice(proj, msg)
+c["last_catchup_ts"] = align.now_ms()        # stamped only once the line is safely queued, so a
+align.save_counters(proj, c)                 # failure here does not silently burn the interval   # SubagentStop output is never shown; the next
+print(json.dumps({"systemMessage": msg}))      # PostToolUse hook prints it

@@ -65,6 +65,8 @@
     <div id="dag"></div>
   </div>
   <div class="side">
+    <h3 id="detailHead" hidden>this subagent <span id="detailClose" style="float:right;cursor:pointer;opacity:.6">close</span></h3>
+    <div id="detail"></div>
     <h3 id="waitHead" hidden>waiting for you . the agent is paused</h3>
     <div id="waiting"></div>
     <h3 id="catchHead">since you last looked</h3>
@@ -91,11 +93,48 @@ async function post(path, body){
 }
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
+let OPEN = new URLSearchParams(location.search).get('open');
+
+const short = f => String(f).split('/').slice(-2).join('/');   // full paths are unreadable here
+
+function drawDetail(st){
+  const head = document.getElementById('detailHead'), box = document.getElementById('detail');
+  const n = (st.nodes || []).find(x => x.id === OPEN);
+  if (!n) { head.hidden = true; box.innerHTML = ''; return; }
+  head.hidden = false;
+  // a node's judgements: the spawn that created it, and anything it did itself
+  const js = (st.judgements || []).filter(j => j.caller === n.id || j.parent === n.label
+                                               || (j.child || '') === n.label);
+  const spawn = js.find(j => j.kind !== 'action');
+  const seenAct = new Set();            // the same action judged twice is one thing, not two cards
+  const departs = js.filter(j => j.kind === 'action' && j.verdict === 'departs')
+                    .filter(j => !seenAct.has(j.child) && seenAct.add(j.child));
+  const quiet = js.filter(j => j.kind === 'action' && j.verdict !== 'departs').length;
+  const files = n.writes.slice(0, 6).map(f => esc(short(f))).join('<br>')
+              + (n.writes.length > 6 ? `<br>and ${n.writes.length - 6} more` : '');
+  const row = j => `<div class="item">
+      <b>departs</b> ${j.confidence ? j.confidence.toFixed(2) : ''}
+      ${(j.lines || []).length ? `<span class="muted">from ${(j.lines || []).map(esc).join(', ')}</span>` : ''}
+      <div class="muted">${esc(short(j.child || ''))}</div>
+    </div>`;
+  box.innerHTML =
+    `<div class="item"><b>${esc(n.label)}</b>
+       <div class="muted">${esc(n.status)}${n.parent ? ' . under ' + esc(n.parent) : ''}</div>
+       ${n.writes.length ? `<div class="muted" style="margin-top:6px">${n.writes.length} files</div>
+          <div class="muted">${files}</div>` : '<div class="muted">no files yet</div>'}
+     </div>` +
+    (spawn ? `<div class="item"><span class="muted">the decision that started it</span>
+       <div><b>${esc(spawn.verdict)}</b> ${spawn.confidence ? spawn.confidence.toFixed(2) : ''}</div></div>` : '') +
+    (departs.length ? `<div class="muted" style="padding:0 14px">${departs.length} of its own actions departed</div>`
+                    + departs.map(row).join('') : '') +
+    `<div class="muted" style="padding:6px 14px">${quiet} other actions judged, nothing to flag</div>`;
+}
+
 function nodeEl(n){
   const d = document.createElement('div');
   d.dataset.id = n.id;
   d.className = 'node' + (n.new_since_look ? ' fresh' : '') + (n.status === 'done' ? ' done' : '');
-  d.onclick = () => post('/look', {node: n.id});
+  d.onclick = () => { OPEN = (OPEN === n.id ? null : n.id); post('/look', {node: n.id}); };
   d.innerHTML =
     (n.mark ? `<span class="dot ${n.mark}">${n.mark==='fits'?'&#10003;':n.mark==='departs'?'!':'?'}</span>` : '') +
     (n.status === 'done' ? '<span class="tag">finished</span>' : '') +
@@ -189,7 +228,8 @@ function highlight(){
            el.scrollIntoView({block:'center'}); }
 }
 const _draw = draw;
-draw = function(){ _draw(); highlight(); };
+draw = function(){ _draw(); highlight(); drawDetail(S); };
+document.getElementById('detailClose').onclick = (e) => { e.stopPropagation(); OPEN = null; draw(); };
 load(); setInterval(load, 4000);
 </script>
 </body>

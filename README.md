@@ -14,6 +14,11 @@ checkpoints, and its impact card.*
 > Research prototype. It is used in an HCI study on human oversight of coding agents. The tested
 > setup is a ProgramBench task run in Claude Code on macOS (details below).
 
+## Docs
+
+- [docs/DESIGN.md](docs/DESIGN.md) how the two components are triggered, what the terminal shows, what the graph shows, and how to run it on a SWE Marathon task
+- [docs/CALIBRATION.md](docs/CALIBRATION.md) every decision from one live run, which calls were right, what we changed, and the re-test
+
 ## What it does
 
 - **Recorder.** Claude Code hooks append every event to `oversight/events.jsonl`: prompts, each

@@ -189,7 +189,7 @@ while not align.slot_free(SLOT):
         if a.get("answer") in ("accept", "accept_all"):
             allow()
         deny("[oversight] You declined this split. Note: %s" % a.get("note", ""))
-open(SLOT, "w").write(rid)
+open(SLOT, "w").write("%s %d" % (rid, os.getpid()))
 align.credit_pause(PROJ, time.time() - wait_start)
 
 # The graph opens itself only here, on a high-confidence departure. A check carries the link but

@@ -14,9 +14,24 @@ except Exception:
     sys.exit(0)
 root = os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
 ov = os.path.join(root, "oversight")
+# A queued catch-up line rides out on this hook. SubagentStop computes it but Claude Code never
+# displays that hook's systemMessage, while PostToolUse's is displayed; so the hook that knows WHEN
+# to speak hands the line to one that CAN. Only on the orchestrator's own tool calls, which is the
+# transcript the user is reading.
+notice = None
+if not data.get("agent_id"):
+    try:
+        sys.path.insert(0, ov)
+        import align
+        notice = align.take_notice(root)
+    except Exception:
+        notice = None
+
 key = re.sub(r"[^\w.-]", "_", data.get("agent_id") or "main")
 p = os.path.join(ov, "control", "inbox", f"{key}.jsonl")
 if not os.path.exists(p):
+    if notice:
+        print(json.dumps({"systemMessage": notice}))
     sys.exit(0)
 dp = p + ".delivered"
 done = set(open(dp).read().split()) if os.path.exists(dp) else set()
@@ -30,11 +45,16 @@ for ln in open(p):
     if m["id"] not in done:
         msgs.append(m)
 if not msgs:
+    if notice:
+        print(json.dumps({"systemMessage": notice}))
     sys.exit(0)
 ctx = "\n\n".join("<human_overseer_message>\n" + m["text"] + "\n</human_overseer_message>" for m in msgs)
 ctx = ("A human overseeing this task sent you the following. It takes priority over your current plan "
        "where they conflict.\n\n" + ctx)
-print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": ctx}}))
+out = {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": ctx}}
+if notice:
+    out["systemMessage"] = notice
+print(json.dumps(out))
 with open(dp, "a") as f:
     f.write("".join(m["id"] + "\n" for m in msgs))
 try:

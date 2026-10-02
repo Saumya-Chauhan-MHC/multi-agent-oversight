@@ -181,11 +181,13 @@ def nodes_from_events(proj):
         if ev == "pre_tool" and e.get("tool_name") in ("Agent", "Task"):
             d = (e.get("tool_input") or {}).get("description")
             if d and d not in denied:          # a denied spawn never starts, so it names no node
-                pending_spawns.append((d, aid or "orchestrator"))
+                pending_spawns.append((d, aid or "orchestrator",
+                                       (e.get("tool_input") or {}).get("prompt") or ""))
         elif ev == "subagent_start" and aid:
-            label, parent = (pending_spawns.pop(0) if pending_spawns
-                             else (e.get("agent_type") or aid[:10], "orchestrator"))
-            nodes[aid] = dict(id=aid, label=label, parent=parent, writes=set(), status="running")
+            label, parent, brief = (pending_spawns.pop(0) if pending_spawns
+                                    else (e.get("agent_type") or aid[:10], "orchestrator", ""))
+            nodes[aid] = dict(id=aid, label=label, parent=parent, brief=brief, writes=set(),
+                              status="running")
             order.append(aid)
         elif ev == "subagent_stop" and aid in nodes:
             nodes[aid]["status"] = "done"
@@ -201,7 +203,7 @@ def nodes_from_events(proj):
             if f:
                 nodes[key]["writes"].add(f)
     nodes.setdefault("orchestrator", dict(id="orchestrator", label="orchestrator", parent=None,
-                                          writes=set(), status="running"))
+                                          brief="", writes=set(), status="running"))
     if any(e.get("ov_event") == "session_end" for e in evs):
         nodes["orchestrator"]["status"] = "done"
     return nodes
@@ -213,7 +215,7 @@ def parent_status(proj, agent_id):
     key = agent_id if agent_id and agent_id in nodes else "orchestrator"
     n = nodes[key]
     kids = [x for x in nodes.values() if x.get("parent") == key]
-    return key, dict(name=n["label"],
+    return key, dict(name=n["label"], brief=(n.get("brief") or "")[:1500],
                      files_written=len(n["writes"]),
                      children=len(kids),
                      running_children=sum(1 for k in kids if k["status"] == "running"),
@@ -286,12 +288,26 @@ def precision(path, window=10):
 
 
 def slot_free(slot):
-    """One open question at a time. A stale slot from a crashed hook must not deadlock the run."""
+    """One open question at a time. A slot whose owner is gone must not hold up the next question.
+
+    The owner writes its pid: if the hook was killed (the user pressed esc, Claude Code timed it out),
+    the file survives and every later hold would queue behind a question nobody is being asked. The
+    age check stays as a backstop for a pid that got reused.
+    """
     try:
         if time.time() - os.path.getmtime(slot) > 300:
             os.unlink(slot)
             return True
-    except OSError:
+        parts = open(slot).read().split()
+        if len(parts) > 1 and parts[1].isdigit():
+            os.kill(int(parts[1]), 0)                 # raises if that process is gone
+    except (OSError, ProcessLookupError):
+        try:
+            os.unlink(slot)
+        except OSError:
+            pass
+        return True
+    except ValueError:
         return True
     return False
 
@@ -328,6 +344,33 @@ def record_intervention(proj, caller, child, answer, note, jrec):
 
 
 # ---------------------------------------------------------------------------- what the user reads
+def queue_notice(proj, text):
+    """Park a line for the next hook that can actually show it.
+
+    SubagentStop's systemMessage is never surfaced by Claude Code (PreToolUse and PostToolUse are;
+    verified with a probe session on 2.1.287), so catch-up computed its line twice in a live run and
+    the user never saw it. The hook that knows WHEN to speak is not the hook that CAN.
+    """
+    d = os.path.join(proj, "oversight", "control")
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, "notice_queue.jsonl"), "a") as f:
+        f.write(json.dumps(dict(ts=now_ms(), text=text)) + "\n")
+
+
+def take_notice(proj):
+    """Pop every queued line, oldest first. Returns one string, or None."""
+    q = os.path.join(proj, "oversight", "control", "notice_queue.jsonl")
+    if not os.path.exists(q):
+        return None
+    try:
+        with open(q) as f:
+            rows = [json.loads(l) for l in f if l.strip()]
+        os.remove(q)
+    except Exception:
+        return None
+    return "\n\n".join(r["text"] for r in rows) or None
+
+
 def notice_text(j, kind, caller):
     """The notice body (SSOT appendix A2 and A3), as plain text for the terminal."""
     L = ["oversight %s   %s -> \"%s\"" %

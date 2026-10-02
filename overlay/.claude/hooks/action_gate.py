@@ -37,8 +37,7 @@ except Exception:
     sys.exit(0)
 if data.get("tool_name") not in ("Bash", "Write", "Edit", "MultiEdit"):
     sys.exit(0)
-if not data.get("agent_id"):
-    sys.exit(0)                               # the orchestrator's own hands are not gated
+IS_ORCHESTRATOR = not data.get("agent_id")
 
 PROJ = os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
 OV = os.path.join(PROJ, "oversight")
@@ -102,8 +101,13 @@ if os.path.exists(marker):
         allow()
 
 who, parent_status = align.parent_status(PROJ, data.get("agent_id"))
+# Without the child's own brief the judge cannot tell what it owns, which produced every false
+# positive in the first live run ("writes web/tests/ui_test.py" flagged as editing someone else's
+# file, when its brief had handed it exactly that directory).
 decision = dict(kind="action", name="%s by %s" % (data.get("tool_name"), parent_status["name"]),
-                task="This subagent is about to run:\n%s" % target)
+                task=("This subagent was given this brief:\n%s\n\nIt is about to run:\n%s\n\n"
+                      "Judge only the action. Anything the brief put inside this subagent's scope is "
+                      "its own to write." % (parent_status.get("brief") or "(brief not recorded)", target)))
 t0 = time.time()
 verdict = judge.judge_decision(OV, decision, parent_status, model=model, settings=st)
 judge_s = round(time.time() - t0, 1)
@@ -116,7 +120,9 @@ jrec = dict(rid=rid, dkey="act-" + key, ts=align.now_ms(), caller=who,
             band=judge.band(verdict, st, model=model),
             **{k: verdict.get(k) for k in ("verdict", "confidence", "evidence", "suggestion", "source")})
 # an action only ever holds on a clear rule break; "nothing covers this" is not worth stopping work
-if jrec["band"] == "check":
+if jrec["band"] == "check" or (IS_ORCHESTRATOR and jrec["band"] == "hold"):
+    # a rule like "launchers are mine" is about the orchestrator's own hands too, but we never block
+    # the agent the user is talking to: it is recorded and shown at catch-up instead
     jrec["band"] = "silent"
 os.makedirs(os.path.join(OV, "judgements"), exist_ok=True)
 json.dump(jrec, open(os.path.join(OV, "judgements", rid + ".json"), "w"), indent=1)
@@ -124,6 +130,9 @@ align.append_event(PROJ, dict(ov_event="judgement", **jrec))
 json.dump(jrec, open(marker, "w"), indent=1)
 
 if jrec["band"] != "hold":
+    if jrec.get("verdict") == "departs":
+        # believed, but not enough to interrupt: it belongs in catch-up rather than vanishing
+        align.bump(PROJ, "flags_unanswered", 1)
     allow()
 
 reason = align.notice_text(jrec, "hold", who)
