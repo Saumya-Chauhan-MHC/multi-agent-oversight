@@ -26,7 +26,8 @@ for ln in open(p):
         m = json.loads(ln)
     except Exception:
         continue
-    if m.get("id") not in done:
+    m.setdefault("id", "n%d" % int(m.get("ts") or time.time() * 1000))
+    if m["id"] not in done:
         msgs.append(m)
 if not msgs:
     sys.exit(0)

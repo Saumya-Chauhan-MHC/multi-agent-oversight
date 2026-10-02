@@ -208,12 +208,25 @@ def slot_free(slot):
     return False
 
 
+def inbox_key(agent):
+    """inbox.py keys the orchestrator's mailbox "main" and sanitises agent ids; match it exactly."""
+    if not agent or agent in ("orchestrator", "main") or str(agent).startswith("main:"):
+        return "main"
+    return re.sub(r"[^\w.-]", "_", str(agent))
+
+
 def send_to_agent(proj, agent, text):
-    """A note delivered to one agent on its next tool call (inbox.py does the injecting)."""
+    """A note delivered to one agent on its next tool call (inbox.py does the injecting).
+
+    Every message carries an id: inbox.py records delivered ids, and without one it would re-inject
+    the same note on every later tool call.
+    """
     d = os.path.join(ctl(proj), "inbox")
     os.makedirs(d, exist_ok=True)
-    with open(os.path.join(d, "%s.jsonl" % agent), "a") as f:
-        f.write(json.dumps(dict(ts=now_ms(), text=text)) + "\n")
+    mid = "n%d" % now_ms()
+    with open(os.path.join(d, "%s.jsonl" % inbox_key(agent)), "a") as f:
+        f.write(json.dumps(dict(id=mid, ts=now_ms(), text=text)) + "\n")
+    return mid
 
 
 def record_intervention(proj, caller, child, answer, note, jrec):
