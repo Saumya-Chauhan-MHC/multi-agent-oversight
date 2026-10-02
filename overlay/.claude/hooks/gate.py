@@ -21,6 +21,20 @@ the reason recorded. The tool must never be why a run dies.
 """
 import sys, json, os, time, hashlib, subprocess
 
+def _fail_open(exc_type, exc, tb):
+    """Any unhandled error: let the tool call through and leave a trace for us, never block work."""
+    try:
+        import traceback, tempfile
+        with open(os.path.join(tempfile.gettempdir(), "oversight-hook-errors.log"), "a") as f:
+            f.write("%s %s\n%s\n" % (time.strftime("%F %T"), os.path.basename(__file__),
+                                      "".join(traceback.format_exception(exc_type, exc, tb))))
+    except Exception:
+        pass
+    sys.exit(0)
+
+
+sys.excepthook = _fail_open
+
 try:
     data = json.load(sys.stdin)
 except Exception:
@@ -99,9 +113,20 @@ if os.path.exists(os.path.join(CTL, "standing_%s.json" % caller)):
 # ---------------------------------------------------------------- judge it
 # The brief itself is the evidence. We do not hand the judge a scraped file list: a path can
 # appear in a sentence that says NOT to touch it, and a scraped list turns that into a flag.
-# the whole brief, not the first paragraph: briefs on long-horizon tasks run past 6,000 chars and
-# the deliverable that breaks a rule is often near the end
-decision = dict(kind="spawn", name=desc, task=prompt[:12000])
+def brief_for_judge(text, head=3000, tail=2000):
+    """Head and tail of a long brief.
+
+    Sending the first 1,200 characters missed deliverables that sat at 1,299. Sending all 8,500 cost
+    90 seconds per judgement. Rules are broken where a brief says what the child owns and what it
+    must deliver, which is the opening and the closing; the middle is usually API detail.
+    """
+    if len(text) <= head + tail:
+        return text
+    return (text[:head] + "\n\n...[middle of the brief elided: %d characters of detail]...\n\n"
+            % (len(text) - head - tail) + text[-tail:])
+
+
+decision = dict(kind="spawn", name=desc, task=brief_for_judge(prompt))
 t0 = time.time()
 verdict = judge.judge_decision(OV, decision, parent_status, model=model, settings=st)
 judge_s = round(time.time() - t0, 1)

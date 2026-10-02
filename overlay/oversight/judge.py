@@ -24,9 +24,8 @@ this brief instruct the subagent to do something this line forbids, or fail to d
 line requires? Quote the brief's own words when it does. A brief can break several lines at once.
 
 Return ONLY a JSON object, no prose, no code fence, with these fields:
-  checked: a list with one entry per user line, in order:
-           {line_id, status: "ok" | "violated" | "not_applicable", quote: the brief's words that
-           decided it, or null}
+  checked: one short entry per user line, in order: {line_id, status: "ok"|"violated"}, and for a
+           violated line also {quote: the brief's words that break it}
   verdict: "fits" or "departs"
   governed_by: the id of the line that tells the agent HOW TO DIVIDE WORK INTO SUBAGENTS, or null if
            the user never said anything about how work should be divided. This is about the shape of
@@ -43,7 +42,7 @@ Return ONLY a JSON object, no prose, no code fence, with these fields:
 
 Rules:
 - "departs" requires at least one evidence pair, and every line_id must be one of the user's lines.
-- verdict is "departs" if ANY line in `checked` is "violated", and "fits" otherwise.
+- verdict is "departs" if any line in `checked` is "violated", and "fits" otherwise.
 - If your own explanation would say the proposal respects, satisfies or complies with the line, the
   verdict is "fits". Never return "departs" with reasoning that says the brief is correct.
 - "One subagent per package or component" is SATISFIED by a subagent scoped to exactly one package,

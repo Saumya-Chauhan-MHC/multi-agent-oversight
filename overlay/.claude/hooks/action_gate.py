@@ -17,6 +17,20 @@ they delegate, and holding the agent they are talking to would be absurd.
 """
 import sys, json, os, re, time, hashlib
 
+def _fail_open(exc_type, exc, tb):
+    """Any unhandled error: let the tool call through and leave a trace for us, never block work."""
+    try:
+        import traceback, tempfile
+        with open(os.path.join(tempfile.gettempdir(), "oversight-hook-errors.log"), "a") as f:
+            f.write("%s %s\n%s\n" % (time.strftime("%F %T"), os.path.basename(__file__),
+                                      "".join(traceback.format_exception(exc_type, exc, tb))))
+    except Exception:
+        pass
+    sys.exit(0)
+
+
+sys.excepthook = _fail_open
+
 try:
     data = json.load(sys.stdin)
 except Exception:
