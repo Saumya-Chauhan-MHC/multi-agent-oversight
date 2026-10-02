@@ -19,7 +19,7 @@ Two surfaces, chosen by `surface_mode` in oversight/memory/settings.json:
 Everything fails open: no session model, no judge, a crash or a timeout and the spawn proceeds with
 the reason recorded. The tool must never be why a run dies.
 """
-import sys, json, os, time, hashlib
+import sys, json, os, time, hashlib, subprocess
 
 try:
     data = json.load(sys.stdin)
@@ -142,6 +142,16 @@ while not align.slot_free(SLOT):
         deny("[oversight] You declined this split. Note: %s" % a.get("note", ""))
 open(SLOT, "w").write(rid)
 align.credit_pause(PROJ, time.time() - wait_start)
+
+# The graph opens itself only here, on a high-confidence departure. A check carries the link but
+# opens nothing, and a fit shows neither: the viewer is not a second screen to watch.
+if st.get("open_dag_on_hold", True):
+    try:
+        subprocess.Popen(["open", "-g", "http://localhost:%s/?focus=%s&rid=%s" %
+                          (st.get("viewer_port", 4173), caller, rid)],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
 
 if st.get("surface_mode", "ask") == "ask":
     # Claude Code's own prompt asks. Its answer reaches us as the tool running or not; the user's

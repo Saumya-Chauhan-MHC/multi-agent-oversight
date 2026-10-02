@@ -91,6 +91,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;
 
 function nodeEl(n){
   const d = document.createElement('div');
+  d.dataset.id = n.id;
   d.className = 'node' + (n.new_since_look ? ' fresh' : '') + (n.status === 'done' ? ' done' : '');
   d.onclick = () => post('/look', {node: n.id});
   d.innerHTML =
@@ -167,6 +168,17 @@ function draw(){
 }
 
 function caughtUp(){ post('/caught-up', {}); }
+
+// the notice that opened this page names the node it is about
+const FOCUS = new URLSearchParams(location.search).get('focus');
+function highlight(){
+  if (!FOCUS) return;
+  const el = [...document.querySelectorAll('.node')].find(n => n.dataset.id === FOCUS);
+  if (el){ el.style.outline = '2px solid var(--accent)'; el.style.outlineOffset = '3px';
+           el.scrollIntoView({block:'center'}); }
+}
+const _draw = draw;
+draw = function(){ _draw(); highlight(); };
 load(); setInterval(load, 4000);
 </script>
 </body>

@@ -29,6 +29,8 @@ DEFAULT_SETTINGS = {
     "check_band": [0.5, 0.65],   # this range, or "no line covers it", asks a quick check
     "judge_model": "claude-haiku-4-5-20251001",
     "judge_timeout_s": 25,
+    "open_dag_on_hold": True,   # the graph opens itself only on a high-confidence departure
+    "viewer_port": 4173,
 }
 
 
