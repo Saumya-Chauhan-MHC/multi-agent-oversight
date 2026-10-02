@@ -14,6 +14,17 @@ import memory, align                                            # noqa: E402
 
 CTL = os.path.join(T, "oversight", "control")
 PENDING, DECISIONS = os.path.join(CTL, "pending"), os.path.join(CTL, "decisions")
+ASKED = os.path.join(CTL, "asked")
+
+# The suite plays the human through files, so it must put the gate in `file` mode. It used to assume
+# that and ran in the default `ask` mode instead, where the gate hands the question to Claude Code
+# and exits: every check that answered a hold failed for the wrong reason. The default path is
+# covered by its own case at the end.
+_SETTINGS = os.path.join(T, "oversight", "memory", "settings.json")
+_st = json.load(open(_SETTINGS)) if os.path.exists(_SETTINGS) else {}
+_mode_before = _st.get("surface_mode")
+_st["surface_mode"] = "file"
+json.dump(_st, open(_SETTINGS, "w"), indent=1)
 PASS, FAIL = [], []
 
 
@@ -129,6 +140,42 @@ check("standing approval silences that parent", out == "", out[:60])
 c = align.counters(T)
 check("unanswered checks are counted", c.get("checks_unanswered", 0) >= 1,
       "checks_unanswered=%s" % c.get("checks_unanswered"))
+
+# 8. the default surface mode: Claude Code asks, the gate exits, and the terminal answer must still
+# land. This is the path a real user is on, and it was broken: ctl.py wrote a decision file for a
+# gate that was no longer waiting, so nothing was recorded and the next spawn was judged again.
+_st["surface_mode"] = "ask"
+json.dump(_st, open(_SETTINGS, "w"), indent=1)
+for _p in glob.glob(os.path.join(CTL, "standing_*.json")):
+    align.clear(_p)                      # case 6 left one, and it silences everything after it
+before_lines = len(memory.load())
+# a decision this suite has not already declined, or inheritance would deny it before any question
+band, out = gate("Everything service, ask mode",
+                 "Build the store in app/store.py, the api in api/routes.py and the browser client "
+                 "in web/app.js, all in this one subagent; the orchestrator tests at the end.",
+                 wait=90)
+asked = sorted(glob.glob(os.path.join(ASKED, "*.json")))
+check("ask mode: the question is handed to Claude Code", '"permissionDecision": "ask"' in out)
+check("ask mode: the decision is recorded for the terminal", bool(asked))
+if asked:
+    rid = os.path.basename(asked[-1])[:-5]
+    subprocess.run([sys.executable, os.path.join(T, "oversight", "ctl.py"), "answer", rid, "no",
+                    "--note", "realtime writes app/realtime.py only; run.sh and tests/ are mine"],
+                   capture_output=True, text=True, cwd=T)
+    answered = open(os.path.join(CTL, "answered.jsonl")).read() if os.path.exists(
+        os.path.join(CTL, "answered.jsonl")) else ""
+    check("ask mode: answering in the terminal is recorded", rid in answered or '"no"' in answered)
+    check("ask mode: the answer becomes a line", len(memory.load()) > before_lines)
+    band2, out2 = gate("Everything service, second try",
+                       "Build the store in app/store.py, the api in api/routes.py and the client in "
+                       "web/app.js in one subagent.", wait=60)
+    check("ask mode: the same decision is then auto-denied", '"deny"' in out2, out2[:60])
+
+if _mode_before is None:
+    _st.pop("surface_mode", None)
+else:
+    _st["surface_mode"] = _mode_before
+json.dump(_st, open(_SETTINGS, "w"), indent=1)
 
 print("\n%d passed, %d failed" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)
