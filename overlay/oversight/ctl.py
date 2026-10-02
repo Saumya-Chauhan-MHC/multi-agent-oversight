@@ -23,6 +23,7 @@ import memory, align                                            # noqa: E402
 CTL = align.ctl(PROJ)
 PENDING, DECISIONS = os.path.join(CTL, "pending"), os.path.join(CTL, "decisions")
 CHECKS = os.path.join(CTL, "checks")
+ASKED = os.path.join(CTL, "asked")
 
 QUESTIONS = [
     dict(id="q1", kind="text", prompt="1  rules a subagent must never break",
@@ -162,9 +163,34 @@ def answer(argv):
     if not rids:
         print("nothing waiting")
         return
+    import view
     for rid in rids:
-        json.dump(dict(answer=a.decision, note=a.note, ts=align.now_ms()),
-                  open(os.path.join(DECISIONS, rid + ".json"), "w"))
+        if os.path.exists(os.path.join(PENDING, rid + ".json")):
+            # a gate process is still waiting: it applies the answer itself
+            json.dump(dict(answer=a.decision, note=a.note, ts=align.now_ms()),
+                      open(os.path.join(DECISIONS, rid + ".json"), "w"))
+            print("answered %s: %s%s" % (rid, a.decision, (" - " + a.note) if a.note else ""))
+            continue
+        # no gate is waiting (the ask went to Claude Code's own prompt, or this is a check): apply it
+        # here, or the answer would be written to a file nobody reads and nothing would be learned
+        rec = None
+        for d in (ASKED, CHECKS):
+            f = os.path.join(d, rid + ".json")
+            if os.path.exists(f):
+                rec = json.load(open(f))
+                break
+        if rec is None:
+            print("no record for %s" % rid)
+            continue
+        j = rec.get("judgement") or rec
+        view.answer_item(PROJ, rid, rec.get("dkey") or j.get("dkey"), a.decision, a.note,
+                         lines=rec.get("lines") or sorted({e.get("line_id") for e in
+                                                           (j.get("evidence") or [])
+                                                           if e.get("line_id")}),
+                         if_accepted=rec.get("if_accepted") or (j.get("suggestion") or {}).get("if_accepted"),
+                         caller=rec.get("caller") or j.get("caller"), where="terminal")
+        align.clear(os.path.join(ASKED, rid + ".json"))
+        align.clear(os.path.join(CHECKS, rid + ".json"))
         print("answered %s: %s%s" % (rid, a.decision, (" - " + a.note) if a.note else ""))
     align.reset_look(PROJ, "answered a notice")
 

@@ -231,17 +231,18 @@ def mark_looked(proj, node=None):
     return align.counters(proj)
 
 
-def answer_item(proj, rid, dkey, answer, note="", lines=None, if_accepted=None, caller=None):
+def answer_item(proj, rid, dkey, answer, note="", lines=None, if_accepted=None, caller=None,
+                where="catch-up"):
     """accept / no from the catch-up panel. Same consequences as answering in the terminal."""
     lines = lines or []
     align.record_answer(os.path.join(align.ctl(proj), "answered.jsonl"),
                         dict(dkey=dkey, rid=rid, answer=answer, note=note, lines=lines,
                              ts=align.now_ms()))
     if answer == "accept" and if_accepted:
-        memory.append_answer(if_accepted, lines, source="answer (accept, catch-up)", rid=rid)
+        memory.append_answer(if_accepted, lines, source="answer (accept, %s)" % where, rid=rid)
     if answer == "no":
         text = note or "do not do this again"
-        memory.append_answer(text, lines, source="answer (no, catch-up)", rid=rid)
+        memory.append_answer(text, lines, source="answer (no, %s)" % where, rid=rid)
         if caller:
             align.send_to_agent(proj, caller, "[oversight] The user looked back at your work: %s" % text)
     align.record_intervention(proj, caller or "orchestrator", rid, answer, note,
