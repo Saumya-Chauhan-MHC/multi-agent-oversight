@@ -123,11 +123,23 @@ python3 oversight/ctl.py watch        # notices appear here, you answer 1 / 2 / 
 
 ---
 
-## What is not built yet
+## The viewer
 
-- The viewer still shows the old DAG. The link in a notice points at it, but there is no
-  "since you last looked" mode, no ToM panel and no accept / no buttons there yet. All of that is in
-  the design (section 4.6) and is the next piece of work.
+Open it in a second window during the run:
+
+```bash
+cd $WORK && python3 oversight/viewer/serve.py     # http://localhost:4173
+```
+
+It shows the work graph with a mark on every node (green tick = fits, red ! = departs from a line
+you wrote, blue ? = a guess nothing you said covered), dimmed for what you have already seen and
+bright for what is new since your last look. The right panel is "since you last looked": each item
+quotes the evidence, and flags and checks carry **accept** and **no, tell the parent** with a note
+box. Clicking a node opens it and counts as a look, which resets the counters, and **caught up**
+does the same without changing anything. Your lines are listed underneath, so you can see the model
+of you growing as you answer.
+
+## What is not built yet
 - Merge and reassignment decisions are only caught when the orchestrator declares them; today the
   tool sees spawns.
 - The catch-up line counts unanswered checks and unshown departures; unseen files are counted but

@@ -138,14 +138,27 @@ def nodes_from_events(proj):
     """
     nodes = {}
     order = []
-    for e in load_events(proj):
+    pending_spawns = []          # a spawn names the child; subagent_start does not carry that name
+    evs = load_events(proj)
+    denied = {e.get("child") for e in evs
+              if e.get("ov_event") == "intervention" and e.get("decision") == "no"}
+    for e in evs:
         ev, aid = e.get("ov_event"), e.get("agent_id")
-        if ev == "subagent_start" and aid:
-            nodes[aid] = dict(id=aid, label=e.get("description") or e.get("agent_type") or aid[:10],
-                              parent=e.get("parent") or "orchestrator", writes=set(), status="running")
+        if ev == "pre_tool" and e.get("tool_name") in ("Agent", "Task"):
+            d = (e.get("tool_input") or {}).get("description")
+            if d and d not in denied:          # a denied spawn never starts, so it names no node
+                pending_spawns.append((d, aid or "orchestrator"))
+        elif ev == "subagent_start" and aid:
+            label, parent = (pending_spawns.pop(0) if pending_spawns
+                             else (e.get("agent_type") or aid[:10], "orchestrator"))
+            nodes[aid] = dict(id=aid, label=label, parent=parent, writes=set(), status="running")
             order.append(aid)
         elif ev == "subagent_stop" and aid in nodes:
             nodes[aid]["status"] = "done"
+        elif ev == "session_end":
+            for n in nodes.values():
+                if n["id"] == "orchestrator":
+                    n["status"] = "done"
         elif ev == "pre_tool" and e.get("tool_name") in ("Write", "Edit", "MultiEdit"):
             f = ((e.get("tool_input") or {}).get("file_path") or "")
             key = aid if aid in nodes else "orchestrator"
@@ -155,6 +168,8 @@ def nodes_from_events(proj):
                 nodes[key]["writes"].add(f)
     nodes.setdefault("orchestrator", dict(id="orchestrator", label="orchestrator", parent=None,
                                           writes=set(), status="running"))
+    if any(e.get("ov_event") == "session_end" for e in evs):
+        nodes["orchestrator"]["status"] = "done"
     return nodes
 
 
