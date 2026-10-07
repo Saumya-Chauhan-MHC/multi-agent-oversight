@@ -1,0 +1,38 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "live-run-viewer",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "experiments/delegation_laundering/viz/live_16032_project/oversight/viewer/serve.py",
+        "4173"
+      ],
+      "port": 4173
+    },
+    {
+      "name": "timeline",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4174",
+        "--directory",
+        "experiments/delegation_laundering/viz"
+      ],
+      "port": 4174
+    },
+    {
+      "name": "report",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4175",
+        "--directory",
+        "experiments/report"
+      ],
+      "port": 4175
+    }
+  ]
+}
