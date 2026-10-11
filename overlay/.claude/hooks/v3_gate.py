@@ -68,15 +68,15 @@ try:
 except Exception:
     pass
 
-band = policy.band(verdict, PROJ)
+band = policy.band(verdict, PROJ, trigger=trigger.get("reason"))
 rid = "%s-%d" % (key[:8], int(time.time() * 1000))
 flag = dict(rid=rid, ts=policy.now(), agent=who, tool=tool, action=action[:300],
             trigger=trigger.get("reason"), risk=trigger.get("risk"),
             dependents=trigger.get("dependents") or [], owner=trigger.get("owner"),
             band=band, judge_s=judge_s,
-            **{k: verdict.get(k) for k in ("verdict", "confidence", "prefs", "evidence",
-                                           "metric", "consequence", "correction", "cost",
-                                           "if_accepted", "source")})
+            **{k: verdict.get(k) for k in ("verdict", "confidence", "prefs", "reqs", "grounds",
+                                           "evidence", "metric", "consequence", "correction",
+                                           "cost", "if_accepted", "source")})
 policy.cache_put(PROJ, key, dict(band=band, verdict=verdict.get("verdict"),
                                  confidence=verdict.get("confidence")))
 align.append_event(PROJ, dict(ov_event="v3_judgement", **flag))
@@ -96,9 +96,11 @@ SIM = os.environ.get("OV_SIMUSER") == "1"
 def _brief(flag, allow_block):
     """What the developer is shown. The same text either way, simulated or not."""
     lines = ["[oversight] %s -> %s" % (who, action[:90]),
-             "  departs from %s" % ", ".join(flag["prefs"] or [])]
+             "  departs from %s" % ", ".join(flag.get("grounds") or flag.get("prefs") or [])]
     for e in (flag.get("evidence") or [])[:2]:
-        lines.append('  you said (%s): "%s"' % (e.get("pref_id"), str(e.get("said"))[:110]))
+        _src = e.get("pref_id") or e.get("req_id")
+        _lead = "you said" if e.get("pref_id") else "the brief says"
+        lines.append('  %s (%s): "%s"' % (_lead, _src, str(e.get("said"))[:110]))
         lines.append("  this does:      %s" % str(e.get("proposed"))[:110])
     if flag.get("consequence"):
         lines.append("  cost if it proceeds (%s): %s" % (flag.get("metric"), flag["consequence"]))
@@ -141,16 +143,28 @@ if band == "hold" and due is not None and due["label"] == block["label"]:
     if SIM:
         _simulated(flag, True)
     reason = _brief(flag, True)
+    policy.mark_shown(PROJ, rid)
     print(json.dumps({"systemMessage": reason,
                       "hookSpecificOutput": {"hookEventName": "PreToolUse",
                                              "permissionDecision": "ask",
                                              "permissionDecisionReason": reason}}))
     sys.exit(0)
 
-if band == "check" and SIM:
-    # the medium band, delivered. Nothing is paused and "ignore" is a valid answer, which is the
-    # whole point of having a band between a hold and silence.
-    _simulated(flag, False)
+if band == "check" and due is not None and due["label"] == block["label"]:
+    # The medium band, delivered. This is the fix the clean recording forced: the tool was putting
+    # both of that run's surfacing opportunities in the check band, correctly, with the right
+    # preference, metric and risk -- and printing neither, because this branch used to be a bare
+    # `sys.exit(0)`. Surfacing scored 0.00 against a golden set the band scorer said it had got
+    # right. Nothing is paused here and ignoring it is a valid answer, which is the entire point
+    # of a band between a hold and silence.
+    if SIM:
+        _simulated(flag, False)
+    print(json.dumps({"systemMessage": _brief(flag, False),
+                      "hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                             "permissionDecision": "allow",
+                                             "permissionDecisionReason": _brief(flag, False)}}))
+    policy.mark_shown(PROJ, rid)
+    sys.exit(0)
 
-# a check with no channel to print on, or a hold the quiet window is holding back
+# a hold the quiet window is holding back, or a check behind another block in the queue
 sys.exit(0)

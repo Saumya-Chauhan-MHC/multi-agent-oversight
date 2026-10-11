@@ -9,7 +9,7 @@ import json, os, shutil, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(HERE))))
-from oversight.v3 import taskmodel as tmod, filter as filt, policy
+from oversight.v3 import taskmodel as tmod, filter as filt, policy, judge3
 
 PASS, FAIL = [], []
 
@@ -392,6 +392,98 @@ check("and a status code the spec names and the test never asserts is reported",
       any("409" in g["missing"] for g in _gap), _gap)
 check("a file no requirement declares as its check is not examined",
       tmod.uncovered(_spec, "huddle/api/app.py", "def handle_api(req): pass") == [])
+
+
+# ---- the check band is delivered, and spends the quiet window ---------------------------------
+# The clean recording put both of its surfacing opportunities in the check band, correctly, with
+# the right preference, metric and risk, and the hook printed neither: that branch was a bare
+# sys.exit(0). Surfacing scored 0.00 against a golden set the band scorer said it had got right.
+import shutil as _sh
+_wd = os.path.join(tempfile.gettempdir(), "ov_v3_window_test")
+_sh.rmtree(_wd, ignore_errors=True)
+os.makedirs(os.path.join(_wd, "oversight", "v3"), exist_ok=True)
+check("a fresh project's window is open", policy.window_open(_wd))
+policy.mark_shown(_wd, "r1", at=policy.now())
+check("showing a check closes the window", not policy.window_open(_wd))
+check("and it opens again once the window has elapsed",
+      policy.window_open(_wd, at=policy.now() + (policy.WINDOW_S + 1) * 1000))
+_st = json.load(open(os.path.join(_wd, "oversight", "control3", "state.json")))
+check("the window is keyed on what was shown, not only on what was answered",
+      "last_shown_ts" in _st and _st.get("last_answer_ts") is None, sorted(_st))
+_sh.rmtree(_wd, ignore_errors=True)
+
+
+# ---- the queue is ranked on a deterministic fact, not on confidence ---------------------------
+# On the clean recording eight items reached the queue, all tying on the `tests` metric. Ranking
+# then fell through to confidence, which orders these decisions at AUC 0.086 -- worse than chance.
+# The two items that mattered were backed by a structural lookup and carried the LOWEST
+# confidences, so they sorted last, and three word-overlap false positives spent the channel.
+_q = os.path.join(tempfile.gettempdir(), "ov_v3_rank_test")
+_sh.rmtree(_q, ignore_errors=True)
+os.makedirs(_q, exist_ok=True)
+policy.enqueue(_q, dict(rid="r1", ts=1000, prefs=["P1-001"], metric="tests",
+                        confidence=0.82, trigger="word_overlap"))
+policy.enqueue(_q, dict(rid="r2", ts=2000, prefs=["P3-001"], metric="tests",
+                        confidence=0.55, trigger="graded_file"))
+_due = policy.due(_q, at=1000 + (policy.WINDOW_S + 1) * 1000)
+check("a structural item outranks an earlier, more confident word-overlap item",
+      _due and _due["label"] == "P3-001", _due and _due["label"])
+_sh.rmtree(_q, ignore_errors=True)
+os.makedirs(_q, exist_ok=True)
+policy.enqueue(_q, dict(rid="r1", ts=1000, prefs=["P1-001"], metric="time",
+                        confidence=0.9, trigger="graded_file"))
+policy.enqueue(_q, dict(rid="r2", ts=2000, prefs=["P3-001"], metric="tests",
+                        confidence=0.5, trigger="word_overlap"))
+_due = policy.due(_q, at=1000 + (policy.WINDOW_S + 1) * 1000)
+check("but the metric at risk still outranks the trigger",
+      _due and _due["label"] == "P3-001", _due and _due["label"])
+_sh.rmtree(_q, ignore_errors=True)
+
+
+# ---- word overlap is a recall net, not grounds for an interruption -----------------------------
+_dep = dict(verdict="departs", confidence=0.95, metric="tests")
+check("a word-overlap departure is capped at silence",
+      policy.band(_dep, trigger="word_overlap") == "silent")
+check("the same verdict from a structural lookup holds",
+      policy.band(_dep, trigger="disabled_check") == "hold")
+check("and a mid-confidence structural departure is a check",
+      policy.band(dict(verdict="departs", confidence=0.6, metric="tests"),
+                  trigger="graded_file") == "check")
+check("the metric gate still closes first, whatever fired",
+      policy.band(dict(verdict="departs", confidence=0.99), trigger="disabled_check") == "silent")
+check("word overlap is still judged and recorded, it just cannot speak",
+      policy.band(_dep, trigger="word_overlap") == "silent"
+      and policy.band(_dep, trigger=None) == "hold")
+
+
+# ---- a verification departure is grounded in a requirement, not an invented rule ---------------
+# Five extraction draws with quote verification on produced "each agent must pass its own tests"
+# zero times, because no contracts file on either task contains such a sentence. The ownership
+# table says an agent OWNS tests/api/**; nothing says it must PASS them. The tool had been citing
+# a rule it wrote itself and labelling it as the developer's words. A requirement needs no
+# invented rule: the brief names what must work and the file that proves it.
+_rq = dict(requirements=[dict(id="R4", text="Roles and permissions enforced",
+                              check="tests/api/test_roles.py",
+                              check_files=["tests/api/test_roles.py"],
+                              spec_quote="admins cannot modify another admin or change owner "
+                                         "(-> 403)", status="untested")],
+           preferences=[dict(id="P1-001", category="P1", rule="Never edit a file you don't own",
+                             when="always", source="decomposition", priority="normal",
+                             serves=["R4"], metrics=["tests"], files=[])],
+           agents={}, decisions=[], state={})
+_rows = tmod.declaring_requirements(_rq, "tests/api/test_roles.py")
+check("the requirement declaring a file as its check is found", [r["id"] for r in _rows] == ["R4"])
+check("an absolute path finds it too",
+      [r["id"] for r in tmod.declaring_requirements(_rq, "/x/y/tests/api/test_roles.py")] == ["R4"])
+check("an unrelated file declares nothing",
+      tmod.declaring_requirements(_rq, "huddle/api/app.py") == [])
+_ok = judge3._validate(dict(verdict="departs", confidence=0.9, metric="tests",
+                            evidence=[dict(req_id="R4", said="admins cannot modify another admin",
+                                           proposed="assertStatus(..., 200)")]), _rq)
+check("the judge may cite a requirement for a departure", _ok and _ok["reqs"] == ["R4"], _ok and _ok["grounds"])
+_bad = judge3._validate(dict(verdict="departs", confidence=0.9, metric="tests",
+                             evidence=[dict(req_id="R99", said="x", proposed="y")]), _rq)
+check("but not a requirement id that was never given to it", _bad is None)
 
 print("\n%d passed, %d failed" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

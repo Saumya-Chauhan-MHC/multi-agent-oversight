@@ -24,7 +24,51 @@ report; test_crash.py and test_chaos.py both require a supervisor that respawns 
 with supervisor=false those two gates are expected to fail and that failure is attributable to a
 missing launcher rather than to broken cluster code.
 """
-import argparse, json, os, re, signal, socket, subprocess, sys, time, urllib.request
+import argparse, errno, json, os, re, signal, socket, subprocess, sys, time, urllib.request
+
+LOCK = os.path.join(os.path.expanduser("~"), ".oversight-grader.lock")
+
+
+def take_lock(timeout=3600):
+    """Only one grading at a time, machine-wide.
+
+    Two grading chains once ran concurrently against different arms. Both bind the contract ports
+    and both call kill_ports first, so each tore the other's cluster down: one arm's API gate was
+    SIGKILLed partway through and its IRC and frontend gates then scored zero against a dead
+    server. That looked exactly like the tool having wrecked the run, which is the worst kind of
+    artifact -- a plausible one. A lock is cheaper than re-learning this.
+    """
+    waited = 0
+    while True:
+        try:
+            fd = os.open(LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            return
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
+            try:
+                pid = int(open(LOCK).read().strip() or 0)
+                os.kill(pid, 0)                       # holder alive?
+            except Exception:
+                os.unlink(LOCK)                        # stale, take it
+                continue
+            if waited >= timeout:
+                raise RuntimeError("another grading has held %s for %ds (pid %d)"
+                                   % (LOCK, waited, pid))
+            if waited == 0:
+                print("waiting for the grader lock held by pid %d" % pid)
+            time.sleep(5)
+            waited += 5
+
+
+def drop_lock():
+    try:
+        if int(open(LOCK).read().strip() or 0) == os.getpid():
+            os.unlink(LOCK)
+    except Exception:
+        pass
 
 GATES = {
     "api": ["test_api.py", "test_profiles.py", "test_read_state.py", "test_channels_extra.py",
@@ -138,8 +182,14 @@ def run_gate(pytest_bin, tests_dir, files, out_dir, name, extra=()):
             passed = failed = total = None
     tail = (r.stdout or "")[-4000:]
     open(os.path.join(out_dir, "gate_%s.log" % name), "w").write((r.stdout or "") + (r.stderr or ""))
-    return dict(gate=name, exit=r.returncode, ok=r.returncode == 0, passed=passed,
-                failed=failed, total=total, seconds=took, tail=tail.splitlines()[-12:])
+    d = dict(gate=name, exit=r.returncode, ok=r.returncode == 0, passed=passed,
+             failed=failed, total=total, seconds=took, tail=tail.splitlines()[-12:])
+    if r.returncode is not None and r.returncode < 0:
+        # killed by a signal: the gate did not fail, it did not finish. Recording it as a failure
+        # is how a torn-down cluster gets reported as broken code.
+        d.update(ok=None, killed_by_signal=-r.returncode,
+                 not_runnable="pytest was killed by signal %d; the result is void" % -r.returncode)
+    return d
 
 
 def main():
@@ -152,6 +202,7 @@ def main():
     ap.add_argument("--label", default="")
     a = ap.parse_args()
 
+    take_lock()
     app = os.path.abspath(a.app)
     out = os.path.abspath(a.out)
     os.makedirs(out, exist_ok=True)
@@ -173,6 +224,7 @@ def main():
     if not rep["health"]:
         rep["note"] = "three nodes never answered /api/health; no gate was run"
         impl.stop()
+        drop_lock()
         json.dump(rep, open(os.path.join(out, "report.json"), "w"), indent=1)
         print(json.dumps(rep, indent=1)); return
 

@@ -36,41 +36,78 @@ def band_of(r):
     return b if b in ORD else "silent"
 
 
+def reached_user(results):
+    """Which decisions the user was actually told about, block included.
+
+    The design groups queued items by the preference they cite and shows the BLOCK, not a single
+    decision: that is the "one recommendation at a time, and a repeat inherits the answer" rule.
+    So when a block is shown, every member of it has been surfaced.
+
+    Scoring only the exact decision index missed this and produced a false miss. On the clean
+    recording idx 84 and idx 103 both cited P3-001 and sat in the same block; the block was shown
+    at 103, size 2, which means the developer was told about the P3-001 problem including idx 84 --
+    570 seconds later than ideal, but told. Recording that as a silent miss overstated the tool's
+    blindness and was the scorer's error, not the tool's.
+
+    Lag is kept rather than hidden, because late is not free: the golden `timing` field says
+    whether speaking had to happen before the action to be worth anything.
+    """
+    shown_blocks = {}
+    for r in results:
+        if r.get("shown") and r.get("block"):
+            shown_blocks.setdefault(r["block"], r["idx"])
+    out = {}
+    for r in results:
+        i = r["idx"]
+        if r.get("shown"):
+            out[i] = dict(how="directly", at=i, lag=0)
+        elif r.get("block") in shown_blocks and band_of(r) in ("hold", "check"):
+            at = shown_blocks[r["block"]]
+            lag = at - i
+            how = ("covered by its block, shown %d decisions earlier" % -lag if lag < 0
+                   else "in a block shown %d decisions later" % lag)
+            out[i] = dict(how=how, at=at, lag=lag)
+    return out
+
+
 def score(results, golden):
     R = {r["idx"]: r for r in results}
     G = {g["idx"]: g for g in golden}
     idxs = sorted(set(R) & set(G))
 
     spoke = [i for i in idxs if band_of(R[i]) in ("hold", "check")]
-    shown = [i for i in idxs if R[i].get("shown")]
+    reached = reached_user(results)
+    shown = sorted(reached)
+    out_reached = {i: reached[i] for i in shown}
     leverage = [i for i in idxs if G[i].get("would_help") == "likely"]
     tied = [i for i in idxs if G[i].get("official_test")]
 
-    out = dict(n=len(idxs), spoke=spoke, shown=shown,
+    out = dict(n=len(idxs), spoke=spoke, shown=shown, how_it_reached=out_reached,
                leverage_points=leverage, tied_to_a_real_failure=tied)
 
-    caught = [i for i in leverage if i in spoke]
+    caught = [i for i in leverage if i in reached]
     out["outcome_recall"] = dict(
         of=len(leverage), caught=len(caught), at=caught,
         value=round(len(caught) / len(leverage), 3) if leverage else None,
-        note="of the moments where acting would likely have fixed a real official failure, "
-             "how many the tool raised in any band")
-    hit = [i for i in spoke if G[i].get("official_test")]
+        note="of the moments where acting would likely have fixed a real official failure, how "
+             "many reached the user, directly or as a member of a block that was shown",
+        lag={i: reached[i]["lag"] for i in caught})
+    hit = [i for i in shown if G[i].get("official_test")]
     out["outcome_precision"] = dict(
-        of=len(spoke), tied=len(hit), at=hit,
+        of=len(shown), tied=len(hit), at=hit,
         value=round(len(hit) / len(spoke), 3) if spoke else None,
-        note="of what the tool raised, how much bears on a failure that really happened")
+        note="of what reached the user, how much bears on a failure that really happened")
 
     sat = collections.Counter(G[i].get("satisfied_after", "neutral") for i in spoke)
     out["satisfaction_of_what_was_raised"] = dict(sat)
     sat_shown = collections.Counter(G[i].get("satisfied_after", "neutral") for i in shown)
     out["satisfaction_of_what_reached_the_user"] = dict(sat_shown)
 
-    harm = [i for i in spoke if G[i].get("satisfied_after") == "annoyed"]
+    harm = [i for i in shown if G[i].get("satisfied_after") == "annoyed"]
     out["harm"] = dict(count=len(harm), at=harm,
                        note="raised, and labelled annoyed: acting on these would have made the "
                             "run worse, not merely wasted attention")
-    out["silent_misses"] = dict(at=[i for i in leverage if i not in spoke],
+    out["silent_misses"] = dict(at=[i for i in leverage if i not in reached],
                                 note="leverage points the tool never raised in any band")
 
     # where the leverage points went, stage by stage
@@ -91,10 +128,13 @@ def score(results, golden):
 def table(s):
     L = ["outcome scoring   n=%d   tool raised %d (%s)   reached the user %d (%s)"
          % (s["n"], len(s["spoke"]), s["spoke"], len(s["shown"]), s["shown"])]
+    for i, d in sorted(s["how_it_reached"].items()):
+        if d["lag"]:
+            L.append("    idx %d %s" % (i, d["how"]))
     L.append("")
     r = s["outcome_recall"]
-    L.append("  outcome recall      %s   caught %d of %d leverage points %s"
-             % (r["value"], r["caught"], r["of"], r["at"]))
+    L.append("  outcome recall      %s   caught %d of %d leverage points %s  lag %s"
+             % (r["value"], r["caught"], r["of"], r["at"], r.get("lag") or {}))
     p = s["outcome_precision"]
     L.append("  outcome precision   %s   %d of %d raised items bear on a real failure"
              % (p["value"], p["tied"], p["of"]))

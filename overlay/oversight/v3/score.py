@@ -32,6 +32,20 @@ def _prf(tp, fp, fn):
     return p, r, f
 
 
+def _told(rs):
+    """Decision indices the user was told about: shown directly, or inside a block that was."""
+    blocks = {r["block"] for r in rs.values() if r.get("shown") and r.get("block")}
+    out = {}
+    for i, r in rs.items():
+        if r.get("shown"):
+            out[i] = 0
+        elif r.get("block") in blocks and r.get("band") in ("hold", "check"):
+            at = min((j for j, q in rs.items() if q.get("shown")
+                      and q.get("block") == r["block"]), default=i)
+            out[i] = at - i
+    return out
+
+
 def score(results, golden):
     g = {int(x["idx"]): x for x in golden}
     rs = {int(r["idx"]): r for r in results}
@@ -39,10 +53,16 @@ def score(results, golden):
     labelled = sorted(set(g) & set(rs))
 
     # --- surfacing, end to end -----------------------------------------------------------
-    tp = [i for i in labelled if rs[i].get("shown") and g[i]["should_surface"]]
-    fp = [i for i in labelled if rs[i].get("shown") and not g[i]["should_surface"]]
-    fn = [i for i in labelled if not rs[i].get("shown") and g[i]["should_surface"]]
-    tn = [i for i in labelled if not rs[i].get("shown") and not g[i]["should_surface"]]
+    # "Told" includes being a member of a block that was shown. The design groups queued items by
+    # the preference they cite and shows the block, so a member of a shown block has reached the
+    # user. Crediting only the exact decision index produced a false miss: on the clean recording
+    # idx 84 and idx 103 both cited P3-001, sat in one block, and the block was shown -- the
+    # developer was told about the P3-001 problem, both instances of it.
+    told = _told(rs)
+    tp = [i for i in labelled if i in told and g[i]["should_surface"]]
+    fp = [i for i in labelled if i in told and not g[i]["should_surface"]]
+    fn = [i for i in labelled if i not in told and g[i]["should_surface"]]
+    tn = [i for i in labelled if i not in told and not g[i]["should_surface"]]
     sp, sr, sf = _prf(len(tp), len(fp), len(fn))
 
     # --- detection, before the policy gates ----------------------------------------------
@@ -83,7 +103,7 @@ def score(results, golden):
             miss["queued behind another block, or inside the quiet window"] += 1
 
     # --- interruption quality ------------------------------------------------------------
-    shown = [i for i in labelled if rs[i].get("shown")]
+    shown = [i for i in labelled if i in told]
     wants = [int(g[i].get("want_interrupt") or 0) for i in shown]
     mean_want = sum(wants) / float(len(wants)) if wants else 0.0
     annoy = sum(1 for w in wants if w <= 2) / float(len(wants)) if wants else 0.0

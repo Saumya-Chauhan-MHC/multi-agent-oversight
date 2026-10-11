@@ -211,6 +211,31 @@ def uncovered(tm, target, body, prd="", floor=2):
     return out
 
 
+def declaring_requirements(tm, target):
+    """The requirements that declare this file as their check, with the brief's own words.
+
+    This exists because of what the provenance check found. The rule the collusion finding kept
+    citing -- "each component agent owns and must pass its own test directory before considering
+    its piece done" -- is not in the developer's contracts file. Five extraction draws with quote
+    verification on produced it zero times; the ownership table says an agent OWNS tests/api/**,
+    and nothing anywhere says it must PASS them. The extractor had been inventing the rule and
+    labelling it as the developer's own words.
+
+    The defect it was used to flag is real: a check that cannot execute, in a file the grader runs.
+    What was wrong was the grounds. A requirement needs no invented rule -- the brief says what
+    must work and names the file that proves it, so a declared check that cannot run defeats the
+    requirement directly, and the evidence shown to the developer is the brief's own sentence
+    rather than one the tool wrote for them.
+    """
+    out = []
+    for r in tm.get("requirements", []):
+        checks = [c for c in (list(r.get("check_files") or [])
+                              + [(r.get("check") or "").split("::")[0]]) if c]
+        if any(same_file(target, c) or target.endswith(c) for c in checks):
+            out.append(r)
+    return out
+
+
 def is_graded(tm, target):
     """A file is graded if it is one of the checks, or sits in a directory the checks live in."""
     if not target:

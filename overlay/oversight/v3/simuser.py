@@ -64,12 +64,17 @@ How to decide:
 def ask(flag, allow_block=True, model=MODEL, timeout=45):
     """flag is the v3 judgement record. Returns (decision, reason)."""
     ev = (flag.get("evidence") or [{}])[0]
+    cited = ", ".join(flag.get("grounds") or flag.get("prefs") or [])
+    heading = ("WHAT THE BRIEF SAYS MUST WORK (%s)" % cited if ev.get("req_id")
+               else "THE RULE IT IS SAID TO DEPART FROM (%s)" % cited)
     parts = ["WHAT THE AGENT IS ABOUT TO DO (%s)\n%s" % (flag.get("agent", "an agent"),
                                                          str(flag.get("action"))[:1200]),
-             "THE RULE IT IS SAID TO DEPART FROM (%s)\n%s" % (", ".join(flag.get("prefs") or []),
-                                                              str(ev.get("said"))[:600])]
+             "%s\n%s" % (heading, str(ev.get("said"))[:600])]
     if flag.get("quote"):
         parts.append("YOUR OWN WORDS THIS CAME FROM\n%s" % str(flag["quote"])[:400])
+    elif ev.get("req_id"):
+        parts.append("WHERE THAT CAME FROM\nthe task brief itself, for the behaviour this file is "
+                     "the declared check for")
     else:
         parts.append("YOUR OWN WORDS THIS CAME FROM\n(none: this rule was inferred, not quoted "
                      "from anything you wrote)")

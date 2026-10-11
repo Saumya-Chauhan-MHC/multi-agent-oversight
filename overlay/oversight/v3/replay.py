@@ -129,7 +129,7 @@ def run(traj_path, model_dir, judge=True, limit=None, verbose=True, verdicts=Non
                 v = dict(verdict="departs" if trigger.get("risk") else "fits", covered=True,
                          confidence=0.9 if trigger.get("risk") else 0.4, evidence=[],
                          prefs=[], metric="tests" if trigger.get("risk") else None)
-            band = policy.band(v, proj)
+            band = policy.band(v, proj, trigger=rec["trigger"])
             rec.update(band=band, **{k: v.get(k) for k in
                                      ("verdict", "confidence", "prefs", "metric", "evidence",
                                       "consequence", "correction", "source")})
@@ -143,16 +143,25 @@ def run(traj_path, model_dir, judge=True, limit=None, verbose=True, verdicts=Non
             flag = dict(rid="r%d" % n, ts=at, agent=who, tool=tool, action=rec["action"],
                         trigger=rec["trigger"], risk=rec.get("risk"),
                         dependents=rec.get("dependents") or [], band=band,
-                        **{k: v.get(k) for k in ("verdict", "confidence", "prefs", "metric",
-                                                 "evidence", "consequence", "correction")})
+                        **{k: v.get(k) for k in ("verdict", "confidence", "prefs", "reqs",
+                                                 "grounds", "metric", "evidence", "consequence",
+                                                 "correction")})
             block = policy.enqueue(proj, flag)
             due = policy.due(proj, at=at)
-            shown = bool(band == "hold" and due is not None and due["label"] == block["label"])
+            # Both bands are delivered now, so both count as shown. Before the check band had an
+            # output channel this line read `band == "hold"`, and it was faithful to the hook --
+            # which is how the replay came to score surfacing 0.00 on a recording where the band
+            # scorer said the tool had put both opportunities in the right band. The replay was
+            # right and the hook was wrong.
+            shown = bool(band in ("hold", "check") and due is not None
+                         and due["label"] == block["label"])
             rec.update(shown=shown, block=block["label"],
                        block_size=len(block["members"]),
                        preempted=bool(due and due.get("preempted")) if shown else False)
             if shown and due.get("preempted"):
                 policy.consume_preempt(proj, at=at)
+            if shown:
+                policy.mark_shown(proj, flag["rid"], at=at)
             if not shown:
                 rec["why_not"] = ("band_check" if band == "check"
                                   else "queued_behind_or_quiet_window")
