@@ -109,15 +109,42 @@ def resources_touched(command):
 
 
 # ---------------------------------------------------------------- list 3: who depends on whom
+IMPORT_RE = re.compile(r"(?:from|import|require)\s*\(?\s*['\"]?([\w./]+)")
+
+
+def _imported_paths(text, known):
+    """Project files referenced by an import inside written code.
+
+    An agent that writes `from huddle.web.http import Request` depends on huddle/web/http.py
+    without ever having opened it, so read-tracking alone misses the edge that matters most:
+    the one into a declared interface.
+    """
+    if not text:
+        return set()
+    hits = set()
+    mods = set(IMPORT_RE.findall(str(text)[:20000]))
+    for mod in mods:
+        as_path = mod.replace(".", "/").strip("/")
+        if not as_path:
+            continue
+        for f in known:
+            stem = (f[:-3] if f.endswith(".py") else f).replace("\\", "/")
+            if stem.endswith(as_path) or stem.endswith(as_path + "/__init__"):
+                hits.add(f)
+    return hits
+
+
 def dependency_map(events):
     """Per agent: files it wrote (owns), files it read but does not own, and its last green run."""
-    wrote, read, last_pass, last_global = {}, {}, {}, {}
+    wrote, read, last_pass, last_global, imports = {}, {}, {}, {}, {}
     for e in events:
         who = e.get("agent_id") or "orchestrator"
         ts = e.get("ov_ts", 0)
         name, ti = e.get("tool_name"), (e.get("tool_input") or {})
         if e.get("ov_event") == "pre_tool" and name in ("Write", "Edit", "MultiEdit"):
             wrote.setdefault(who, {})[ti.get("file_path", "")] = ts
+            body = ti.get("content") or ti.get("new_string") or ""
+            imports.setdefault(who, {})[ts] = body
         elif e.get("ov_event") == "pre_tool" and name == "Read":
             read.setdefault(who, {})[ti.get("file_path", "")] = ts
         elif e.get("ov_event") == "post_tool" and name == "Bash":
@@ -129,10 +156,14 @@ def dependency_map(events):
                 if not re.search(r"\b(tests?/[a-z_]+/|-k )\b", cmd):
                     last_global["*"] = max(last_global.get("*", 0), ts)
     owned = {w: set(f for f in files) for w, files in wrote.items()}
+    known = {f for files in wrote.values() for f in files if f}
     deps = {}
-    for who, files in read.items():
+    for who in set(list(read) + list(imports)):
         mine = owned.get(who, set())
-        deps[who] = {f for f in files if f and f not in mine}
+        edges = {f for f in read.get(who, {}) if f and f not in mine}
+        for body in (imports.get(who) or {}).values():
+            edges |= {f for f in _imported_paths(body, known) if f not in mine}
+        deps[who] = edges
     return dict(wrote=wrote, owns=owned, depends_on=deps,
                 last_pass=last_pass, last_global=last_global.get("*", 0))
 
@@ -150,19 +181,30 @@ def stale_claim(dep, who):
     return None
 
 
+def same_file(a, b):
+    """Two paths naming the same file.
+
+    Hooks report an absolute path, a preference names a repo-relative one, and a trajectory
+    recorded on another machine carries that machine's prefix. Comparing them exactly meant a
+    declared interface was never recognised as one.
+    """
+    if not a or not b:
+        return False
+    a, b = str(a).replace("\\", "/"), str(b).replace("\\", "/")
+    return a == b or a.endswith("/" + b) or b.endswith("/" + a)
+
+
 def interface_dependents(tm, dep, target):
     """Agents that have read or written a declared interface file, other than the one acting."""
     declared = set()
     for p in preferences(tm):
         if p["category"] == "P2":
             declared |= set(p.get("files") or [])
-    if target not in declared:
+    if not any(same_file(target, d) for d in declared):
         return None
     users = set()
-    for who, files in dep["depends_on"].items():
-        if target in files:
-            users.add(who)
-    for who, files in dep["wrote"].items():
-        if target in files:
-            users.add(who)
+    for src in ("depends_on", "wrote"):
+        for who, files in (dep.get(src) or {}).items():
+            if any(same_file(target, f) for f in files):
+                users.add(who)
     return users

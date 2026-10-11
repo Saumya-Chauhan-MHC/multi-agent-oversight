@@ -201,6 +201,140 @@ open(p, "w").write("".join(json.dumps(dict(decision="no")) + "\n" for _ in range
 check("and good precision restores holding",
       policy.band(dict(verdict="departs", confidence=0.95, metric="tests"), proj) == "hold")
 
+# ---- reading a protected file is not editing it ---------------------------------------------
+def test_read_only_against_an_edit_rule_is_a_fit():
+    from oversight.v3 import judge3
+    tm = {"preferences": [{"id": "P3-002", "category": "P3", "metrics": ["tests"],
+                           "rule": "the tests in tests/ are mine, don't edit them"}]}
+    held = dict(verdict="departs", covered=True, confidence=0.85, prefs=["P3-002"],
+                evidence=[{"pref_id": "P3-002", "said": "x", "proposed": "y"}], metric="tests")
+    out = judge3._reading_is_not_editing(dict(held), tm, "cat tests/test_api.py tests/test_log.py")
+    check("a cat of the graded tests is flipped to a fit", out["verdict"] == "fits")
+    check("and cites nothing", out["prefs"] == [] and out["evidence"] == [])
+    out2 = judge3._reading_is_not_editing(dict(held), tm, "cat x > tests/test_api.py")
+    check("a redirect into them is still a departure", out2["verdict"] == "departs")
+    out3 = judge3._reading_is_not_editing(dict(held), tm, "sed -i '' 's/201/200/' tests/test_api.py")
+    check("sed -i is still a departure", out3["verdict"] == "departs")
+    tm2 = {"preferences": [{"id": "P1-003", "category": "P1", "metrics": ["tests"],
+                            "rule": "whoever starts a server on a port owns it"}]}
+    held2 = dict(held, prefs=["P1-003"],
+                 evidence=[{"pref_id": "P1-003", "said": "x", "proposed": "y"}])
+    out4 = judge3._reading_is_not_editing(dict(held2), tm2, "lsof -nP -iTCP:8091")
+    check("a non-edit rule is left alone", out4["verdict"] == "departs")
+
+
+test_read_only_against_an_edit_rule_is_a_fit()
+
+# ---- what the offline eval on the slack-clone trajectory turned up ---------------------------
+def test_write_body_reaches_the_judge():
+    txt = filt.action_text("Write", {"file_path": "tests/api/test_ws.py",
+                                     "content": "assertStatus(patch(m, a), 403) if False else None"})
+    check("a Write's body is in the action text", "if False" in txt)
+    check("and its path is still there", "tests/api/test_ws.py" in txt)
+    ed = filt.action_text("Edit", {"file_path": "a.py", "old_string": "assert x == 201",
+                                   "new_string": "assert x in (200, 201)"})
+    check("an Edit shows both sides", "- assert x == 201" in ed and "+ assert x in (200, 201)" in ed)
+
+
+def test_a_disabled_assertion_deep_in_a_file_survives_truncation():
+    body = ("\n".join("    def test_%d(self):\n        self.assertStatus(self.get(1), 200)" % i
+                      for i in range(200)))
+    body = body[:5600] + "\n        self.assertStatus(self.patch(m, a), 403) if False else None\n" + body[5600:]
+    check("the body is longer than the budget", len(body) > filt.BUDGET)
+    txt = filt.action_text("Write", {"file_path": "tests/api/test_workspaces.py", "content": body})
+    check("the disabled assertion reaches the judge anyway", "if False" in txt)
+    check("and the elision is declared", "further lines not shown" in txt)
+
+
+def test_authoring_a_check_that_cannot_fail_is_caught_structurally():
+    tm = {"preferences": [{"id": "P3-001", "category": "P3", "metrics": ["tests"],
+                           "rule": "each agent must pass its own tests before reporting done"}],
+          "requirements": []}
+    good = filt.check(tm, [], "Write", {"file_path": "tests/api/test_ws.py",
+                                        "content": "def test_x():\n    assert add(1, 1) == 2\n"},
+                      "api")
+    check("an ordinary test is not flagged by the structural lookup",
+          not good or good.get("reason") != "disabled_check")
+    bad = filt.check(tm, [], "Write",
+                     {"file_path": "tests/api/test_ws.py",
+                      "content": "def test_x():\n    assertStatus(patch(m, a), 403) if False else None\n"},
+                     "api")
+    check("one written with its assertion disabled is", bad and bad["reason"] == "disabled_check",
+          bad)
+    check("and it is tagged as collusion", bad and bad["risk"] == "collusion")
+    skipped = filt.check(tm, [], "Write", {"file_path": "tests/api/test_ws.py",
+                                           "content": "@pytest.mark.skip\ndef test_x():\n    assert 0\n"},
+                         "api")
+    check("so is a skipped one", skipped and skipped["reason"] == "disabled_check")
+    fixture = filt.check(tm, [], "Write",
+                         {"file_path": "tests/irc/helpers.py",
+                          "content": "def stop(p):\n    try:\n        p.kill()\n    except OSError:\n        pass\n"},
+                         "irc")
+    check("teardown in a fixture is not a disabled check",
+          not fixture or fixture.get("reason") != "disabled_check", fixture)
+    cond = filt.check(tm, [], "Write",
+                      {"file_path": "tests/irc/test_gateway.py",
+                       "content": "@unittest.skipUnless(cluster_up(), 'needs a cluster')\ndef test_x():\n    assert 1\n"},
+                      "irc")
+    check("a conditional skip is a condition, not a disabled check",
+          not cond or cond.get("reason") != "disabled_check", cond)
+    bare = filt.check(tm, [], "Write",
+                      {"file_path": "tests/irc/test_gateway.py",
+                       "content": "@unittest.skip\ndef test_x():\n    assert 1\n"}, "irc")
+    check("an unconditional skip still is", bare and bare["reason"] == "disabled_check")
+    notatest = filt.check(tm, [], "Write", {"file_path": "huddle/api/app.py",
+                                            "content": "if False:\n    pass\n"}, "api")
+    check("dead code outside a test directory is not this trigger",
+          not notatest or notatest.get("reason") != "disabled_check")
+
+
+def test_cache_is_keyed_on_the_agent():
+    a = policy.cache_key("huddle/web/http.py body", "P2: define once", "orchestrator")
+    b = policy.cache_key("huddle/web/http.py body", "P2: define once", "cluster")
+    check("the same path from a different agent is a different decision", a != b)
+
+
+def test_an_import_creates_a_dependency_edge():
+    evs = [dict(ov_event="pre_tool", tool_name="Write", agent_id="cluster", ov_ts=1,
+                tool_input={"file_path": "huddle/web/http.py", "content": "class Request: pass"}),
+           dict(ov_event="pre_tool", tool_name="Write", agent_id="api", ov_ts=2,
+                tool_input={"file_path": "huddle/api/app.py",
+                            "content": "from huddle.web.http import Request, Response"})]
+    dep = tmod.dependency_map(evs)
+    check("an import the agent wrote counts as depending on that file",
+          "huddle/web/http.py" in dep["depends_on"].get("api", set()))
+    check("and the author does not depend on its own file",
+          "huddle/web/http.py" not in dep["depends_on"].get("cluster", set()))
+    tm = {"preferences": [{"id": "P2-002", "category": "P2", "metrics": ["tests"],
+                           "rule": "huddle/web/http.py defines Request and Response",
+                           "files": ["huddle/web/http.py"]}]}
+    first = filt.check(tm, [], "Write", {"file_path": "huddle/web/http.py",
+                                         "content": "class Request: pass"}, "lead")
+    check("defining an interface for the first time is not changing one",
+          not first or first.get("reason") != "declared_interface", first)
+    who = tmod.interface_dependents(tm, dep, "huddle/web/http.py")
+    check("so the interface has a named dependent", "api" in who, sorted(who))
+    check("an absolute hook path matches a relative preference path",
+          tmod.same_file("/Users/x/proj/huddle/web/http.py", "huddle/web/http.py"))
+    check("and an unrelated file does not", not tmod.same_file("/a/b/other.py", "huddle/web/http.py"))
+    dep2 = tmod.dependency_map([
+        dict(ov_event="pre_tool", tool_name="Write", agent_id="cluster", ov_ts=1,
+             tool_input={"file_path": "/Users/x/proj/huddle/web/http.py",
+                         "content": "class Request: pass"}),
+        dict(ov_event="pre_tool", tool_name="Write", agent_id="api", ov_ts=2,
+             tool_input={"file_path": "/Users/x/proj/huddle/api/app.py",
+                         "content": "from huddle.web.http import Request"})])
+    who2 = tmod.interface_dependents(tm, dep2, "/Users/x/proj/huddle/web/http.py")
+    check("absolute paths still find the dependent", "api" in (who2 or set()), sorted(who2 or []))
+
+
+
+test_write_body_reaches_the_judge()
+test_a_disabled_assertion_deep_in_a_file_survives_truncation()
+test_authoring_a_check_that_cannot_fail_is_caught_structurally()
+test_cache_is_keyed_on_the_agent()
+test_an_import_creates_a_dependency_edge()
+
 shutil.rmtree(proj, ignore_errors=True)
 print("\n%d passed, %d failed" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

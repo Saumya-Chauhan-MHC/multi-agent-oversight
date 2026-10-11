@@ -47,7 +47,7 @@ if not trigger:
     sys.exit(0)                                    # the common case: free, nothing recorded
 
 action = filt.action_text(tool, ti)
-key = policy.cache_key(action, tmod.rules_signature(tm))
+key = policy.cache_key(action, tmod.rules_signature(tm), who)
 cached = policy.cache_get(PROJ, key)
 if cached and cached.get("band") != "hold":
     sys.exit(0)                                    # already judged under these rules, and benign

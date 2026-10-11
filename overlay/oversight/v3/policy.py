@@ -45,8 +45,12 @@ def now():
 
 
 # ---------------------------------------------------------------- cache
-def cache_key(action_text, rules_sig):
-    return hashlib.sha256((action_text + "|" + rules_sig).encode()).hexdigest()[:16]
+def cache_key(action_text, rules_sig, agent=""):
+    """Keyed on the agent too: the lead defining an interface and a component agent
+    rewriting the same path later are different decisions, and the second must not be
+    served the first one's verdict.
+    """
+    return hashlib.sha256((agent + "|" + action_text + "|" + rules_sig).encode()).hexdigest()[:16]
 
 
 def cache_get(proj, key):
