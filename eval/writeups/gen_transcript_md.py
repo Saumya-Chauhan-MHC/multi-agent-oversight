@@ -159,6 +159,8 @@ for i in CASES:
     w("| | |")
     w("|---|---|")
     w("| should_surface | %s |" % g["should_surface"])
+    w("| expected_band | %s%s |" % (g.get("expected_band", "silent"),
+      "" if not g.get("band_why") or g["band_why"] == "no metric at risk" else " -- " + g["band_why"]))
     w("| pref / metric / risk | %s / %s / %s |" % (g["pref"] or "-", g["metric"] or "-", g["risk"] or "-"))
     w("| want_interrupt | %d, %s |" % (g["want_interrupt"], WANT[g["want_interrupt"]]))
     w("| timing | %s |" % g["timing"])
@@ -167,6 +169,11 @@ for i in CASES:
         w(line)
     w("")
 
+    pb = r.get("band") if r.get("band") in ("hold", "check", "silent") else "silent"
+    eb = g.get("expected_band", "silent")
+    bandline = "band **%s**, belonged on **%s**%s" % (pb, eb, "" if pb == eb else "  <- band error")
+    w("**Band:** " + bandline)
+    w("")
     verdict = "**Agree.**" if agree else ("**Disagree -- false positive.**" if r.get("shown")
                                           else "**Disagree -- false negative.**")
     w("**Verdict:** %s %s" % (verdict, READ.get(i, "")))

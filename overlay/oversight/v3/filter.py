@@ -139,10 +139,10 @@ def check(proj_tm, events, tool_name, tool_input, agent_id):
     who = agent_id or "orchestrator"
 
     # ---- path B first: the lookups are exact, and they catch what wording cannot -------------
-    graded = tmod.graded_files(tm)
-    if target and any(target.endswith(g) or g in target for g in graded):
-        return dict(path="B", reason="graded_file", detail=target, risk="collusion")
-
+    # The specific triggers run before the general one. `graded_file` only says "this file is on
+    # the grader's list", which is true of every test file an agent legitimately writes; naming
+    # what is actually wrong with the content is strictly more useful, and once graded_file covers
+    # whole directories it would otherwise swallow both of the triggers below.
     if tool_name == "Write" and TESTISH.search(target.replace("\\", "/")):
         hit = DISABLED_CHECK.search(str(ti.get("content") or ""))
         if hit:
@@ -152,6 +152,9 @@ def check(proj_tm, events, tool_name, tool_input, agent_id):
     if tool_name in ("Edit", "MultiEdit") and TEST_WEAKENED.search(str(ti.get("new_string") or "")):
         if any(seg in target for seg in ("test", "spec")):
             return dict(path="B", reason="weakened_check", detail=target, risk="collusion")
+
+    if tmod.is_graded(tm, target):
+        return dict(path="B", reason="graded_file", detail=target, risk="collusion")
 
     reg = tmod.registry(events)
     for res in tmod.resources_touched(cmd):

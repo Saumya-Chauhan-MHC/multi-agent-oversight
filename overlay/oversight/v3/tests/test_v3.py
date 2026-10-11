@@ -336,5 +336,32 @@ test_cache_is_keyed_on_the_agent()
 test_an_import_creates_a_dependency_edge()
 
 shutil.rmtree(proj, ignore_errors=True)
+
+# ---- the graded set on a greenfield task -------------------------------------------------------
+# Found by the live arm: check_files is resolved once, at extraction, against the test files that
+# exist then. At the start of a task that is none of them, so a check authored so it cannot fail
+# used to be invisible for the whole run. The grader runs directories, so a directory is the unit.
+_green = dict(requirements=[dict(id="R1", text="api works", check="tests/api/test_api.py",
+                                 check_files=[], status="untested")],
+              preferences=[dict(id="P3-001", category="P3", rule="Each component agent owns and "
+                                "must pass its own test directory (tests/api, tests/cluster) "
+                                "before considering its piece done.", when="always",
+                                source="decomposition", priority="normal", serves=["R1"],
+                                metrics=["tests"], files=[])],
+              agents={}, decisions=[], state={})
+check("a test directory named by a preference is graded even with no files resolved",
+      tmod.is_graded(_green, "tests/api/test_workspaces.py"))
+check("an absolute path to it is graded too",
+      tmod.is_graded(_green, "/Users/x/proj/tests/api/test_workspaces.py"))
+check("and source outside it is not",
+      not tmod.is_graded(_green, "huddle/api/app.py"))
+check("the check path itself is graded even though the file does not exist yet",
+      tmod.is_graded(_green, "tests/api/test_api.py"))
+check("a disabled assertion in a greenfield test directory reaches path B",
+      (filt.check(_green, [], "Write", {"file_path": "tests/api/test_roles.py",
+                                        "content": "class T:\n    def test_x(self):\n"
+                                                   "        assert self.get(403) if False else None\n"},
+                  "a1") or {}).get("reason") == "disabled_check")
+
 print("\n%d passed, %d failed" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

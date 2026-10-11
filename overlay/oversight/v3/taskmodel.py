@@ -76,6 +76,37 @@ def graded_files(tm):
     return {f for f in out if f.endswith((".py", ".js", ".ts", ".go"))}
 
 
+def graded_dirs(tm):
+    """The directories the graded files live in, plus any test directory a preference names.
+
+    Without this the graded set is whatever test files happened to exist when the extractor ran,
+    which on a greenfield task is nothing: the agent writes its first test an hour in, and a check
+    authored so it cannot fail is invisible because the file it is in was not on a list built
+    before the file existed. The verifier runs directories, not the particular files we guessed, so
+    a directory is the honest unit. Found by the live arm of the offline eval.
+    """
+    out = set()
+    for f in graded_files(tm):
+        d = os.path.dirname(f)
+        if d:
+            out.add(d.rstrip("/") + "/")
+    for p in preferences(tm):
+        for m in re.findall(r"\b((?:[\w.-]+/)*tests?(?:/[\w.-]+)*)/?\b", p.get("rule") or ""):
+            if m and not m.endswith((".py", ".js", ".ts", ".go")):
+                out.add(m.rstrip("/") + "/")
+    return out
+
+
+def is_graded(tm, target):
+    """A file is graded if it is one of the checks, or sits in a directory the checks live in."""
+    if not target:
+        return False
+    if any(same_file(target, g) or target.endswith(g) for g in graded_files(tm)):
+        return True
+    t = target if target.startswith("/") else "/" + target
+    return any(("/" + d.strip("/") + "/") in t for d in graded_dirs(tm))
+
+
 # ---------------------------------------------------------------- list 2: who started what
 PORT_RE = re.compile(r"(?::|\bport[= ])(\d{2,5})\b")
 BARE_PORT_RE = re.compile(r"\b(\d{4,5})\b")      # `node.py 8000` names a port without a colon
