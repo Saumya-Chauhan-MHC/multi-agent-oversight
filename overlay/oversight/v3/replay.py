@@ -80,13 +80,28 @@ def run(traj_path, model_dir, judge=True, limit=None, verbose=True, verdicts=Non
     rules_sig = tmod.rules_signature(tm)
     brief_of = briefs(events)
 
+    def _regrounds(v):
+        """Rebuild prefs/reqs/grounds from the stored evidence.
+
+        A reused verdict may predate the fields -- the grounds field was added after several
+        replays had already been written. Without this every reused item came back with no
+        grounds, so `enqueue` labelled them all "?", they collapsed into one block, and showing
+        any member credited every other: a surfacing recall of 1.00 that meant nothing. Evidence
+        is stored, so the grounds are recoverable rather than lost.
+        """
+        ev = v.get("evidence") or []
+        v["prefs"] = sorted({e["pref_id"] for e in ev if isinstance(e, dict) and e.get("pref_id")})
+        v["reqs"] = sorted({e["req_id"] for e in ev if isinstance(e, dict) and e.get("req_id")})
+        v["grounds"] = v["prefs"] + v["reqs"]
+        return v
+
     prior = {}
     if verdicts:                                       # reuse judgements from an earlier replay
         for l in open(verdicts):
             if l.strip():
                 r = json.loads(l)
                 if r.get("verdict"):
-                    prior[int(r["idx"])] = r
+                    prior[int(r["idx"])] = _regrounds(r)
 
     proj = tempfile.mkdtemp(prefix="replay-")          # policy state for this replay only
     os.makedirs(os.path.join(proj, "oversight"), exist_ok=True)
@@ -120,8 +135,8 @@ def run(traj_path, model_dir, judge=True, limit=None, verbose=True, verdicts=Non
 
             if n in prior:
                 v = {k: prior[n].get(k) for k in ("verdict", "covered", "confidence", "prefs",
-                                                  "metric", "evidence", "consequence",
-                                                  "correction", "source")}
+                                                  "reqs", "grounds", "metric", "evidence",
+                                                  "consequence", "correction", "source")}
             elif judge:
                 v = judge3.judge(tm, rec["action"], trigger, brief_of.get(who, "")[:2500],
                                  {"name": who})
@@ -131,8 +146,9 @@ def run(traj_path, model_dir, judge=True, limit=None, verbose=True, verdicts=Non
                          prefs=[], metric="tests" if trigger.get("risk") else None)
             band = policy.band(v, proj, trigger=rec["trigger"])
             rec.update(band=band, **{k: v.get(k) for k in
-                                     ("verdict", "confidence", "prefs", "metric", "evidence",
-                                      "consequence", "correction", "source")})
+                                     ("verdict", "confidence", "prefs", "reqs", "grounds",
+                                      "metric", "evidence", "consequence", "correction",
+                                      "source")})
             policy.cache_put(proj, key, dict(band=band, verdict=v.get("verdict"),
                                              confidence=v.get("confidence")))
             if band == "silent":
@@ -162,6 +178,12 @@ def run(traj_path, model_dir, judge=True, limit=None, verbose=True, verdicts=Non
                 policy.consume_preempt(proj, at=at)
             if shown:
                 policy.mark_shown(proj, flag["rid"], at=at)
+            # The live hook drops an item from the queue once its action has happened
+            # (`v3_land.py` on PostToolUse). The replay was not modelling that stage, so items
+            # stayed queued forever and the queue silted up: the top-ranked block was one whose
+            # action had already landed, which can never be the current decision, so nothing was
+            # ever shown again. Every action in a recording did happen, so every item lands.
+            policy.mark_landed(proj, flag["rid"])
             if not shown:
                 rec["why_not"] = ("band_check" if band == "check"
                                   else "queued_behind_or_quiet_window")

@@ -70,6 +70,11 @@ def cache_put(proj, key, verdict):
 STRUCTURAL = {"graded_file", "disabled_check", "weakened_check", "resource_owned_elsewhere",
               "declared_interface", "stale_claim"}
 
+# How specific the fact is. A named defect in the content beats "this file is on the grader's
+# list", which is true of every test file an agent legitimately writes.
+SPECIFICITY = {"disabled_check": 0, "weakened_check": 0, "stale_claim": 0,
+               "declared_interface": 1, "resource_owned_elsewhere": 1, "graded_file": 2}
+
 
 def band(verdict, proj=None, trigger=None):
     """Which surface this verdict belongs on. Silence is the default and has to be argued out of.
@@ -175,8 +180,8 @@ def mark_shown(proj, rid, at=None):
 def _rank(b):
     """Which waiting block is worth the one channel. Lower sorts first.
 
-    Order: the metric at risk, then whether a deterministic fact backs the item, then confidence,
-    then arrival.
+    Order: the metric at risk, then whether a deterministic fact backs the item, then how specific
+    that fact is, then arrival. **Confidence is not in the key at all.**
 
     The middle term is the one the evaluation forced. It used to be absent, so items tying on
     metric were ordered by confidence alone -- and confidence does not rank these decisions: on
@@ -191,11 +196,19 @@ def _rank(b):
     that tracked whether an item was worth showing: 2 of 2 right on the first trajectory against
     0 of 3 for word overlap, and both golden positives on the second. Ranking on it costs nothing
     and does not depend on the judge being calibrated, which it is not.
+
+    Confidence was dropped from the key entirely after it kept doing damage as a mere tiebreaker.
+    Once every queued item was structural they tied on the first three terms and confidence decided
+    again -- and the item that carried the run's only leverage came in at 0.55 against 0.78s, so it
+    sorted last a second time. A signal measured at AUC 0.086 is not neutral, it is inverted, so
+    using it anywhere in the ordering systematically disadvantages exactly the decisions that
+    matter. Arrival order is merely neutral, and it has a side benefit: speaking about things in
+    the order they happened keeps the notice closer to the action it is about.
     """
     best = min((tmod.METRIC_RANK.get(m.get("metric"), 9) for m in b["members"]), default=9)
     structural = 0 if any(m.get("trigger") in STRUCTURAL for m in b["members"]) else 1
-    conf = max((float(m.get("confidence") or 0) for m in b["members"]), default=0)
-    return (best, structural, -conf, b["ts"])
+    spec = min((SPECIFICITY.get(m.get("trigger"), 3) for m in b["members"]), default=3)
+    return (best, structural, spec, b["ts"])
 
 
 def window_open(proj, at=None):

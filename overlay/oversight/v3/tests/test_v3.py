@@ -428,6 +428,23 @@ policy.enqueue(_q, dict(rid="r2", ts=2000, prefs=["P3-001"], metric="tests",
 _due = policy.due(_q, at=1000 + (policy.WINDOW_S + 1) * 1000)
 check("a structural item outranks an earlier, more confident word-overlap item",
       _due and _due["label"] == "P3-001", _due and _due["label"])
+# confidence is not in the key: a 0.55 named defect must outrank a 0.95 "file is on the list"
+_sh.rmtree(_q, ignore_errors=True); os.makedirs(_q, exist_ok=True)
+policy.enqueue(_q, dict(rid="r1", ts=1000, prefs=["P1-001"], metric="tests",
+                        confidence=0.95, trigger="graded_file"))
+policy.enqueue(_q, dict(rid="r2", ts=2000, prefs=["P3-001"], metric="tests",
+                        confidence=0.55, trigger="disabled_check"))
+_due = policy.due(_q, at=1000 + (policy.WINDOW_S + 1) * 1000)
+check("a specific defect outranks a general one regardless of confidence",
+      _due and _due["label"] == "P3-001", _due and _due["label"])
+_sh.rmtree(_q, ignore_errors=True); os.makedirs(_q, exist_ok=True)
+policy.enqueue(_q, dict(rid="r1", ts=1000, prefs=["P1-001"], metric="tests",
+                        confidence=0.55, trigger="graded_file"))
+policy.enqueue(_q, dict(rid="r2", ts=2000, prefs=["P3-001"], metric="tests",
+                        confidence=0.95, trigger="graded_file"))
+_due = policy.due(_q, at=1000 + (policy.WINDOW_S + 1) * 1000)
+check("and an all-else-equal tie falls to arrival, not to the more confident item",
+      _due and _due["label"] == "P1-001", _due and _due["label"])
 _sh.rmtree(_q, ignore_errors=True)
 os.makedirs(_q, exist_ok=True)
 policy.enqueue(_q, dict(rid="r1", ts=1000, prefs=["P1-001"], metric="time",
@@ -477,6 +494,10 @@ check("an absolute path finds it too",
       [r["id"] for r in tmod.declaring_requirements(_rq, "/x/y/tests/api/test_roles.py")] == ["R4"])
 check("an unrelated file declares nothing",
       tmod.declaring_requirements(_rq, "huddle/api/app.py") == [])
+check("a different file in the same graded directory declares it too, as is_graded does",
+      [r["id"] for r in tmod.declaring_requirements(_rq, "tests/api/test_workspaces.py")] == ["R4"])
+check("a file in a sibling directory does not",
+      tmod.declaring_requirements(_rq, "tests/cluster/test_events.py") == [])
 _ok = judge3._validate(dict(verdict="departs", confidence=0.9, metric="tests",
                             evidence=[dict(req_id="R4", said="admins cannot modify another admin",
                                            proposed="assertStatus(..., 200)")]), _rq)
@@ -484,6 +505,27 @@ check("the judge may cite a requirement for a departure", _ok and _ok["reqs"] ==
 _bad = judge3._validate(dict(verdict="departs", confidence=0.9, metric="tests",
                              evidence=[dict(req_id="R99", said="x", proposed="y")]), _rq)
 check("but not a requirement id that was never given to it", _bad is None)
+
+
+# ---- a long test file's table of contents survives truncation ---------------------------------
+# The judge was asked whether a 33KB suite covers what the brief requires, and answered on the
+# first 4,000 characters. Its own words: "the snippet is just the start of a real test file".
+# A file's test names are what tell you what it does and does not cover, so they are kept.
+_big = "import time\nfrom helpers import call\n\nclass TestApi(ApiTestCase):\n"
+for _k in range(60):
+    _big += ("    def test_thing_%d(self):\n        r = call('GET', '/api/x')\n"
+             "        self.assertEqual(r.status, 200)\n%s\n" % (_k, "        # pad\n" * 12))
+_big += "    def test_admin_cannot_promote(self):\n        pass\n"
+_sal = filt._salient(_big)
+check("a 60-test file is truncated", len(_big) > 4000 and len(_sal) < len(_big),
+      "%d -> %d chars" % (len(_big), len(_sal)))
+_names = [l for l in _sal.splitlines() if "def test_" in l]
+check("but most of its test names survive", len(_names) >= 40, "%d names kept" % len(_names))
+check("including the last one, which plain truncation would lose",
+      "test_admin_cannot_promote" in _sal)
+check("and the elision is declared rather than silent",
+      "not shown" in _sal and "declares" in _sal)
+check("a short body is returned untouched", filt._salient("def test_x(): pass") == "def test_x(): pass")
 
 print("\n%d passed, %d failed" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

@@ -63,13 +63,22 @@ SALIENT_RE = re.compile(
     r"xfail|\bpass\s*#)", re.I)
 
 
+# What a test file is FOR is its list of test names. Without them the judge is handed the imports
+# and a fragment, and on the clean recording it said so in as many words -- "the snippet is just
+# the start of a real test file" -- while answering a question about whether a 33KB suite covers
+# what the brief asks. A name per line is cheap and is the one thing that makes the coverage
+# question answerable at all.
+DEFS_RE = re.compile(r"^\s*(?:async\s+)?def\s+(?:test_\w+|setUp\w*|tearDown\w*)\s*\(|"
+                     r"^\s*class\s+\w*Test\w*\s*\(|^\s*(?:it|describe|test)\s*\(", re.M)
+
+
 def _salient(body, budget=BUDGET):
     """Fit a long file body into the judge's budget without losing the part that matters.
 
     Truncating at the first N characters is why a test written with its only role assertion
     disabled read as ordinary work: the `if False` sat 5,600 characters in. So keep the head,
-    then every line that looks like a disabled, skipped or stubbed check, then the tail, and
-    say how much was dropped.
+    then every test's name, then every line that looks like a disabled, skipped or stubbed check,
+    then the tail, and say how much was dropped.
     """
     body = str(body or "")
     if len(body) <= budget:
@@ -88,19 +97,30 @@ def _salient(body, budget=BUDGET):
             break
         tail.insert(0, l)
         n += len(l) + 1
+    # every test name first: that is the file's table of contents
+    names, n = [], 0
+    for l in lines:
+        if l in head or l in tail:
+            continue
+        if DEFS_RE.match(l) and n + len(l) < budget // 3:
+            names.append(l.rstrip())
+            n += len(l) + 1
     picked, n = [], 0
     for i, l in enumerate(lines):
-        if l in head or l in tail:
+        if l in head or l in tail or l in names:
             continue
         if SALIENT_RE.search(l) and n + len(l) < budget // 2:
             picked.append("%d: %s" % (i + 1, l.strip()))
             n += len(l) + 1
     out = "\n".join(head)
+    if names:
+        out += ("\n... every test, fixture and suite this file declares (%d) ...\n" % len(names)
+                + "\n".join(names))
     if picked:
         out += "\n... lines of interest from the middle of the file ...\n" + "\n".join(picked)
-    dropped = len(lines) - len(head) - len(tail) - len(picked)
+    dropped = len(lines) - len(head) - len(tail) - len(picked) - len(names)
     out += "\n... %d further lines not shown ...\n" % max(0, dropped) + "\n".join(tail)
-    return out[:budget + 600]
+    return out[:budget + 1200]
 
 
 def action_text(tool_name, tool_input):

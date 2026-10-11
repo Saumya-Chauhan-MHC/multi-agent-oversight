@@ -7,7 +7,8 @@ Each metric exists to answer one question, and they are kept apart on purpose:
   detection      did the judge see it at all, before the policy decided whether to speak
                  (separates "we were blind" from "we were quiet")
   band           did we pick the right volume: stop the work, mention it, say nothing
-  attribution    when we spoke, did we cite the right preference, the right metric and the
+  attribution    when we spoke, did we cite the right grounds (a preference OR the requirement
+                 whose declared check is undermined), the right metric and the
                  right safety risk (a right flag with the wrong reason is still a bad flag)
   miss taxonomy  for every missed golden point, which stage dropped it
   interruption   would a developer have wanted this interruption, averaged over what we showed
@@ -83,7 +84,15 @@ def score(results, golden):
     # --- attribution on what we showed ---------------------------------------------------
     att = Counter()
     for i in tp:
-        att["pref"] += int(g[i].get("pref") in (rs[i].get("prefs") or []))
+        # Attribution is scored on `grounds`: preference ids and requirement ids together. A
+        # verification departure is grounded in the requirement whose declared check cannot do its
+        # job, because on these tasks no preference the developer wrote is about test coverage.
+        # Scoring only `pref` once credited the tool 1.00 for citing the same wrong id as a
+        # mislabelled golden row, which is agreement rather than correctness.
+        want = set(g[i].get("grounds") or ([g[i]["pref"]] if g[i].get("pref") else []))
+        got = set((rs[i].get("grounds") or []) + (rs[i].get("prefs") or [])
+                  + (rs[i].get("reqs") or []))
+        att["pref"] += int(bool(want & got))
         att["metric"] += int(g[i].get("metric") == rs[i].get("metric"))
         att["risk"] += int((g[i].get("risk") or None) == (rs[i].get("risk") or None))
 
@@ -124,7 +133,9 @@ def score(results, golden):
         if not g[i]["should_surface"]:
             continue
         later = [j for j in shown if j >= i and rs[j].get("block") and
-                 g[i].get("pref") in (rs[j].get("prefs") or [])]
+                 set(g[i].get("grounds") or ([g[i]["pref"]] if g[i].get("pref") else []))
+                 & set((rs[j].get("grounds") or []) + (rs[j].get("prefs") or [])
+                       + (rs[j].get("reqs") or []))]
         offsets.append(0 if i in tp else (min(later) - i if later else None))
     late = [o for o in offsets if o not in (None, 0)]
 

@@ -122,7 +122,10 @@ for d, name in ((A, "control (no tool)"), (B, "treatment (v3, nobody to ask)"),
         import collections as _c
         note = (note + "  " if note else "") + "developer answers: %s" % dict(
             _c.Counter(a.get("decision") for a in ans))
-    row("%s: graded by the real gates" % name, os.path.exists(rep), note, running=grading_live)
+    # a grading is only RUNNING for the arm that has no report yet; otherwise any live grading
+    # marked every arm as being graded at once
+    row("%s: graded by the real gates" % name, os.path.exists(rep), note,
+        running=grading_live and not os.path.exists(rep))
 row("side by side comparison", os.path.exists(os.path.join(EV, "arms.json")))
 print()
 print("  live processes:  arm B %s   replay %s   grading %s"

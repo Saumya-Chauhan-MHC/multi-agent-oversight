@@ -228,10 +228,20 @@ def declaring_requirements(tm, target):
     rather than one the tool wrote for them.
     """
     out = []
+    t = target if target.startswith("/") else "/" + target
     for r in tm.get("requirements", []):
         checks = [c for c in (list(r.get("check_files") or [])
                               + [(r.get("check") or "").split("::")[0]]) if c]
         if any(same_file(target, c) or target.endswith(c) for c in checks):
+            out.append(r)
+            continue
+        # A directory match too, for consistency with is_graded(). Without it a file sitting in a
+        # graded directory was graded but had no declaring requirement, so the requirement-grounded
+        # path could not reach it: the extractor's guessed check was tests/api/test_api.py and the
+        # agent wrote tests/api/test_workspaces.py. The verifier runs directories, so a directory
+        # is the unit on both sides or neither.
+        dirs = {os.path.dirname(c).strip("/") for c in checks if os.path.dirname(c)}
+        if any(("/" + d + "/") in t for d in dirs if d):
             out.append(r)
     return out
 
