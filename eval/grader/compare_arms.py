@@ -34,6 +34,7 @@ def load(d):
 
 def arm(d, label):
     E = load(d)
+
     pre = [e for e in E if e.get("ov_event") == "pre_tool"]
     dec = [e for e in pre if e.get("tool_name") in TOOLS]
     ts = [e.get("ov_ts") for e in E if e.get("ov_ts")]
@@ -55,6 +56,11 @@ def arm(d, label):
                 gates_passed=rep.get("gates_passed"), gates_total=rep.get("gates_total"),
                 tests_passed=rep.get("tests_passed"), tests_total=rep.get("tests_total"),
                 official_reward=rep.get("official_reward"),
+                own_passed=(rep.get("own_suite") or {}).get("passed"),
+                own_total=(rep.get("own_suite") or {}).get("total"),
+                not_runnable=", ".join(rep.get("gates_not_runnable") or []) or None,
+                answers=dict(collections.Counter(
+                    e.get("decision") for e in E if e.get("ov_event") == "v3_user")) or None,
                 gate_detail={g["gate"]: "%s/%s" % (g["passed"], g["total"])
                              for g in rep.get("gates", [])})
 
@@ -63,40 +69,58 @@ ROWS = [("events recorded", "events"), ("decisions (Write/Edit/Bash/Agent)", "de
         ("all tool calls", "tool_calls"), ("subagents spawned", "spawns"),
         ("files written or edited", "files_touched"), ("wall clock, minutes", "minutes"),
         ("judge calls", "judgements"), ("reached the user", "shown"),
+        ("developer answers", "answers"),
         ("start.sh present", "start_sh"), ("booted with a supervisor", "supervisor"),
         ("three nodes healthy", "health"), ("anti-cheat", "anti_cheat"),
-        ("gates passed", "gates_passed"), ("tests passed", "tests_passed"),
+        ("gates not runnable here", "not_runnable"),
+        ("the agent's own suite", "own_passed"),
+        ("gates passed (runnable)", "gates_passed"), ("official tests passed", "tests_passed"),
         ("official reward (binary)", "official_reward")]
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--control", required=True)
-    ap.add_argument("--treatment", required=True)
+    ap.add_argument("--arm", action="append", required=True, metavar="LABEL=DIR",
+                    help="repeatable, e.g. --arm 'control (no tool)=~/research/arm_a_control'")
     ap.add_argument("--out")
     a = ap.parse_args()
-    A, B = arm(a.control, "control (no tool)"), arm(a.treatment, "treatment (v3)")
+    arms = []
+    for spec in a.arm:
+        label, _, d = spec.partition("=")
+        arms.append(arm(os.path.expanduser(d), label))
+
+    def cell(x, key):
+        v = x.get(key)
+        if v is None:
+            return "-"
+        if key == "gates_passed":
+            return "%s/%s" % (v, x["gates_total"])
+        if key == "own_passed":
+            return "%s/%s passed" % (v, x["own_total"])
+        if key == "tests_passed":
+            return "%s/%s" % (v, x["tests_total"])
+        return str(v)
 
     w = max(len(r[0]) for r in ROWS) + 2
-    print("%-*s %-22s %-22s" % (w, "", A["label"], B["label"]))
-    print("-" * (w + 46))
+    cw = max(24, max(len(x["label"]) for x in arms) + 2)
+    print("%-*s%s" % (w, "", "".join("%-*s" % (cw, x["label"]) for x in arms)))
+    print("-" * (w + cw * len(arms)))
     for name, key in ROWS:
-        va, vb = A.get(key), B.get(key)
-        if key == "gates_passed":
-            va = None if va is None else "%s/%s" % (va, A["gates_total"])
-            vb = None if vb is None else "%s/%s" % (vb, B["gates_total"])
-        if key == "tests_passed":
-            va = None if va is None else "%s/%s" % (va, A["tests_total"])
-            vb = None if vb is None else "%s/%s" % (vb, B["tests_total"])
-        print("%-*s %-22s %-22s" % (w, name, "-" if va is None else va, "-" if vb is None else vb))
-    if A["gate_detail"] or B["gate_detail"]:
+        print("%-*s%s" % (w, name, "".join("%-*s" % (cw, cell(x, key)) for x in arms)))
+    gates = sorted({g for x in arms for g in x["gate_detail"]})
+    if gates:
         print("\nper gate (passed/total):")
-        for g in sorted(set(A["gate_detail"]) | set(B["gate_detail"])):
-            print("  %-10s %-14s %-14s" % (g, A["gate_detail"].get(g, "-"), B["gate_detail"].get(g, "-")))
-    if B["bands"]:
-        print("\ntreatment bands:", B["bands"])
+        for g in gates:
+            print("  %-10s%s" % (g, "".join("%-*s" % (cw, x["gate_detail"].get(g, "-"))
+                                            for x in arms)))
+    print("\nbands raised:")
+    for x in arms:
+        print("  %-*s %s" % (cw, x["label"], x["bands"] or "none"))
+    print("\nwhat the developer said:")
+    for x in arms:
+        print("  %-*s %s" % (cw, x["label"], x["answers"] or "nobody was asked"))
     if a.out:
-        json.dump(dict(control=A, treatment=B), open(a.out, "w"), indent=1)
+        json.dump({x["label"]: x for x in arms}, open(a.out, "w"), indent=1)
         print("\nwrote", a.out)
 
 

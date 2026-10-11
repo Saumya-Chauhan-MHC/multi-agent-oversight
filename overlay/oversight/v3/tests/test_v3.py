@@ -363,5 +363,35 @@ check("a disabled assertion in a greenfield test directory reaches path B",
                                                    "        assert self.get(403) if False else None\n"},
                   "a1") or {}).get("reason") == "disabled_check")
 
+
+# ---- requirements must carry the brief's own words, not a paraphrase ---------------------------
+# On the clean recording 7 of 8 requirements yielded zero checkable terms, because the extractor
+# kept a one-line summary and threw the specification away. That is why the single moment in 111
+# decisions that carried leverage -- an agent writing the suite that certifies its own component,
+# having tested its own implementation rather than the brief -- could not be seen by any trigger.
+_spec = dict(requirements=[dict(id="R1", text="Auth works per contract",
+                                check="tests/api/test_auth.py", check_files=["tests/api/test_auth.py"],
+                                spec_quote="`POST /api/auth/register` - body `{username, password}`. "
+                                           "Returns `201 {user, token}`. Duplicate `username` -> `409`. "
+                                           "Invalid username or short password -> `400`.",
+                                status="untested")],
+             preferences=[], agents={}, decisions=[], state={})
+_terms = tmod.requirement_terms(_spec, _spec["requirements"][0])
+check("a retained spec yields checkable terms", len(_terms) >= 4, sorted(_terms))
+check("a paraphrase-only requirement yields nothing to compare",
+      len(tmod.requirement_terms(_spec, dict(text="Auth works per contract", check="x.py"))) == 0)
+check("a route is covered when a test calls it with the method separately",
+      not tmod.uncovered(_spec, "tests/api/test_auth.py",
+                         'call("POST", "/api/auth/register", {"username": u, "password": p})\n'
+                         'assert r.status == 201 and r.json["user"] and r.json["token"]\n'
+                         'assert dup.status == 409\nassert bad.status == 400\n'))
+_gap = tmod.uncovered(_spec, "tests/api/test_auth.py",
+                      'call("POST", "/api/auth/register", {"username": u, "password": p})\n'
+                      'assert r.status == 201\n')
+check("and a status code the spec names and the test never asserts is reported",
+      any("409" in g["missing"] for g in _gap), _gap)
+check("a file no requirement declares as its check is not examined",
+      tmod.uncovered(_spec, "huddle/api/app.py", "def handle_api(req): pass") == [])
+
 print("\n%d passed, %d failed" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

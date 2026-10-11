@@ -87,12 +87,16 @@ if band == "silent":
 block = policy.enqueue(PROJ, flag)
 due = policy.due(PROJ)
 
-if band == "hold" and due is not None and due["label"] == block["label"]:
-    if due.get("preempted"):
-        policy.consume_preempt(PROJ)      # only a real interruption spends the hourly budget
+# OV_SIMUSER=1 answers on the developer's behalf, for running a treatment arm unattended. It also
+# turns on check-band delivery, because a medium-confidence item that nobody can see is the same
+# as silence and the first treatment run showed exactly that.
+SIM = os.environ.get("OV_SIMUSER") == "1"
+
+
+def _brief(flag, allow_block):
+    """What the developer is shown. The same text either way, simulated or not."""
     lines = ["[oversight] %s -> %s" % (who, action[:90]),
-             "  departs from %s  confidence %.2f" % (", ".join(flag["prefs"] or []),
-                                                     flag.get("confidence") or 0)]
+             "  departs from %s" % ", ".join(flag["prefs"] or [])]
     for e in (flag.get("evidence") or [])[:2]:
         lines.append('  you said (%s): "%s"' % (e.get("pref_id"), str(e.get("said"))[:110]))
         lines.append("  this does:      %s" % str(e.get("proposed"))[:110])
@@ -100,15 +104,53 @@ if band == "hold" and due is not None and due["label"] == block["label"]:
         lines.append("  cost if it proceeds (%s): %s" % (flag.get("metric"), flag["consequence"]))
     if flag.get("correction"):
         lines.append("  instead: %s  [%s]" % (flag["correction"], flag.get("cost") or "unknown cost"))
-    others = [m for m in block["members"] if m["rid"] != rid]
-    for m in others:
+    for m in [m for m in block["members"] if m["rid"] != rid]:
         lines.append("  also in this block: %s -> %s" % (m["agent"], m["action"][:70]))
-    reason = "\n".join(lines)
+    if not allow_block:
+        lines.append("  (nothing is paused; this is a mention)")
+    return "\n".join(lines)
+
+
+def _simulated(flag, allow_block):
+    """Ask the stand-in developer, record what it said, and act on it."""
+    from oversight.v3 import simuser
+    decision, why = simuser.ask(flag, allow_block=allow_block)
+    align.append_event(PROJ, dict(ov_event="v3_user", rid=rid, band=band,
+                                  allow_block=allow_block, decision=decision, reason=why,
+                                  prefs=flag.get("prefs"), metric=flag.get("metric"),
+                                  risk=flag.get("risk"), trigger=flag.get("trigger"),
+                                  simulated=True))
+    note = "[oversight] the developer says: %s" % why if why else ""
+    if decision == "block" and allow_block:
+        print(json.dumps({"systemMessage": _brief(flag, True) + "\n  DEVELOPER: stop. " + why,
+                          "hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                                 "permissionDecision": "deny",
+                                                 "permissionDecisionReason":
+                                                     (why or "the developer stopped this") +
+                                                     "  " + (flag.get("correction") or "")}}))
+    elif decision == "note":
+        print(json.dumps({"systemMessage": note or _brief(flag, allow_block),
+                          "hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                                 "permissionDecision": "allow",
+                                                 "permissionDecisionReason": note}}))
+    sys.exit(0)
+
+if band == "hold" and due is not None and due["label"] == block["label"]:
+    if due.get("preempted"):
+        policy.consume_preempt(PROJ)      # only a real interruption spends the hourly budget
+    if SIM:
+        _simulated(flag, True)
+    reason = _brief(flag, True)
     print(json.dumps({"systemMessage": reason,
                       "hookSpecificOutput": {"hookEventName": "PreToolUse",
                                              "permissionDecision": "ask",
                                              "permissionDecisionReason": reason}}))
     sys.exit(0)
 
-# a check, or a hold that the quiet window is holding back: recorded, nothing paused
+if band == "check" and SIM:
+    # the medium band, delivered. Nothing is paused and "ignore" is a valid answer, which is the
+    # whole point of having a band between a hold and silence.
+    _simulated(flag, False)
+
+# a check with no channel to print on, or a hold the quiet window is holding back
 sys.exit(0)

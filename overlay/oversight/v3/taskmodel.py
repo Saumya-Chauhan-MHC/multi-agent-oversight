@@ -97,6 +97,120 @@ def graded_dirs(tm):
     return out
 
 
+# A requirement names behaviours. Its declared check is supposed to exercise them. The terms worth
+# checking for are the ones the brief itself treats as API surface: things in backticks, route
+# fragments, and the status codes a behaviour is defined by. Prose words are not evidence of
+# anything, so they are not used.
+TERM_RE = re.compile(r"`([^`]{3,40})`|(/api/[\w{}/]+)|\b([a-z][a-z0-9]{3,}_[a-z0-9_]{2,})\b")
+STATUS_RE = re.compile(r"\b(40[0-9]|41[0-9]|42[0-9]|20[0-9]|30[0-9])\b")
+TERM_STOP = {"workspace_id", "channel_id", "user_id", "created_at", "message_id", "parent_id",
+             "display_name", "node_id", "is_private", "is_dm", "is_archived", "owner_id"}
+
+
+METHOD_RE = re.compile(r"^(?:get|post|put|patch|delete)\s+", re.I)
+ENVELOPE_RE = re.compile(r"^(\d{3})\s*\{(.*)\}$")
+BRACED_RE = re.compile(r"^\{(.+)\}$")
+
+
+def _terms(text):
+    """Checkable atoms, normalised so a test that exercises a route actually matches it.
+
+    The first version compared literal strings and reported `post /api/auth/register` missing from
+    a file that calls `call("POST", "/api/auth/register", ...)`. A route is matched by its path, a
+    response envelope by its status code and its field names separately, because that is how a
+    test spells them.
+    """
+    out = set()
+    for m in TERM_RE.finditer(text or ""):
+        t = (m.group(1) or m.group(2) or m.group(3) or "").strip()
+        t = t.split("(")[0].strip().lower()
+        if not t or t.startswith("#"):
+            continue
+        env = ENVELOPE_RE.match(t)
+        if env:
+            out.add(env.group(1))
+            for f in env.group(2).split(","):
+                f = f.strip().strip("?").strip()
+                if 3 <= len(f) <= 30:
+                    out.add(f)
+            continue
+        br = BRACED_RE.match(t)
+        if br:
+            # a body or envelope shape. A test spells its fields, never the brace notation, so the
+            # fields are the checkable atoms and the notation itself is not.
+            for f in br.group(1).split(","):
+                f = f.split(":")[0].strip().strip("?").strip("`").strip()
+                if 3 <= len(f) <= 30:
+                    out.add(f)
+            continue
+        t = METHOD_RE.sub("", t).strip()
+        if t.startswith("/api/"):
+            out.add(t.rstrip("/"))
+            continue
+        t = t.strip("/")
+        if 3 <= len(t) <= 40:
+            out.add(t)
+    return out
+
+
+def requirement_terms(tm, req, prd=""):
+    """The checkable things this requirement is about, taken from the requirement ALONE.
+
+    `prd` is accepted and ignored. The first version of this reached into the whole brief for any
+    identifier that looked loosely related to the requirement's wording, and the result was
+    useless: a cluster-events requirement came back wanting the SPA's `channel-add-member-form`
+    test ids, and every test file in the run looked uncovered. Scoping terms to the requirement
+    plus its own quoted spec is the only version that says anything.
+
+    Which means this lookup is only as good as `spec_quote`. A requirement whose text is a
+    one-line prose summary -- "Workspaces/channels CRUD, roles, membership semantics function per
+    contract" -- yields no checkable term at all, and `uncovered` correctly says nothing rather
+    than guessing. The fix for that is upstream, in what the extractor keeps.
+    """
+    return {t for t in (_terms(req.get("text", "")) | _terms(req.get("spec_quote", "")))
+            if t not in TERM_STOP}
+
+
+def uncovered(tm, target, body, prd="", floor=2):
+    """Which requirements declare this file as their check, and what they name that it never does.
+
+    This is the question the eval found missing. On the clean recording the one moment that carried
+    leverage was an agent writing the 33KB suite that certifies its own component, having tested
+    what it built rather than what was asked: no admin-to-admin role transition, no mention
+    expansion, and over-length rejection at its own chosen boundary instead of the brief's. Four of
+    the six official test failures were behaviours that file does not exercise. Every existing
+    verification trigger looked at the file's *shape* -- is a check disabled, is one weakened -- and
+    none of them asked whether the check covers the requirement it is the check for.
+    """
+    lo = (body or "").lower()
+
+    def absent(term):
+        """A route counts as covered if its literal path appears, or if its distinctive segments
+        do -- a test may build the path from pieces."""
+        if term in lo:
+            return False
+        if term.startswith("/api/"):
+            segs = [x for x in term.split("/") if x and not x.startswith("{") and x != "api"]
+            return not (segs and all(sg in lo for sg in segs))
+        return True
+
+    out = []
+    for r in tm.get("requirements", []):
+        checks = list(r.get("check_files") or []) + [(r.get("check") or "").split("::")[0]]
+        if not any(c and (same_file(target, c) or target.endswith(c)
+                          or os.path.dirname(c) and os.path.dirname(c) in target)
+                   for c in checks):
+            continue
+        terms = requirement_terms(tm, r, prd)
+        if len(terms) < floor:
+            continue          # nothing concrete enough to be absent; say nothing
+        missing = sorted(t for t in terms if t and absent(t))
+        if missing:
+            out.append(dict(req=r.get("id"), text=r.get("text", "")[:160],
+                            missing=missing[:8], of=len(terms)))
+    return out
+
+
 def is_graded(tm, target):
     """A file is graded if it is one of the checks, or sits in a directory the checks live in."""
     if not target:
