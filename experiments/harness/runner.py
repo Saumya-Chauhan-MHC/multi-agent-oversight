@@ -83,6 +83,8 @@ def parser(sc):
     ap.add_argument("--interactive", action="store_true",
                     help="Claude Code's own UI in this terminal; with --oversight, holds are asked in its dialog")
     ap.add_argument("--oversight", action="store_true", help="install overlay/ in the workspace: a live run")
+    ap.add_argument("--tool", choices=("v2", "v3"), default="v2", help="--oversight: which version of the tool")
+    ap.add_argument("--task-model", default=None, help="--tool v3: a task_model.json to use instead of extracting one")
     ap.add_argument("--rules", default=None, help="q1 for ctl.py init; default: the scenario's")
     ap.add_argument("--viewer-port", type=int, default=4180, help="--interactive --oversight: the tool's graph")
     ap.add_argument("--answer", choices=["human", "no", "accept"], default="no",
@@ -130,7 +132,8 @@ def main(sc, argv):
         if a.oversight and os.path.isdir(os.path.join(ws, "oversight")):
             from . import oversight_live
             oversight_live.collect(ws, run_dir)
-            result["oversight_summary"] = oversight_live.summary(run_dir)
+            result["oversight_summary"] = (oversight_live.summary_v3(run_dir) if a.tool == "v3"
+                                           else oversight_live.summary(run_dir))
         json.dump(result, open(os.path.join(run_dir, "result.json"), "w"), indent=1)
         if not a.keep:
             docker.remove(ctr)
@@ -145,12 +148,20 @@ def run_agent(sc, a, prompt, ctr, ws, run_dir):
     out, answerer, viewer = {}, None, None
     if a.oversight:
         from . import oversight_live
-        rules = a.rules if a.rules is not None else sc.rules(a, prompt)
-        lines = oversight_live.install(ws, rules, interactive=a.interactive, viewer_port=a.viewer_port)
-        out.update(oversight=True, oversight_lines=[l["text"] for l in lines],
+        if a.tool == "v3":
+            lines = oversight_live.install_v3(ws, prompt, a.task_model)
+        else:
+            rules = a.rules if a.rules is not None else sc.rules(a, prompt)
+            lines = oversight_live.install(ws, rules, interactive=a.interactive, viewer_port=a.viewer_port)
+        out.update(oversight=True, oversight_tool=a.tool, oversight_lines=[l["text"] for l in lines],
                    answer="dialog" if a.interactive else a.answer)
         os.makedirs(os.path.join(run_dir, "oversight"), exist_ok=True)
-        if a.interactive:
+        if a.tool == "v3":
+            if a.interactive:
+                viewer = oversight_live.start_viewer_v3(ws, a.viewer_port)
+            else:
+                print("  v3 headless: a hold is an \"ask\", which -p treats as a refusal (no one to ask)", flush=True)
+        elif a.interactive:
             viewer = oversight_live.start_viewer(ws, a.viewer_port)
         elif a.answer == "human":
             print(oversight_live.human_instructions(ws), flush=True)
@@ -160,7 +171,11 @@ def run_agent(sc, a, prompt, ctr, ws, run_dir):
             answerer.start()
     if a.interactive:
         print("\n  %s   %s   model: %s" % (sc.name, os.path.relpath(run_dir, sc.runs), a.model or "default"))
-        if a.oversight:
+        if a.oversight and a.tool == "v3":
+            print("  Oversight v3 is on. A hold is Claude Code's own permission dialog; a notice is a")
+            print("  system message that pauses nothing. Its event log: oversight/events.jsonl in the workspace.")
+            print("  The graph: http://localhost:%d   (read-only; open it yourself, nothing opens it on a hold)" % a.viewer_port)
+        elif a.oversight:
             print("  Oversight is on; a held spawn is asked in Claude Code's own dialog.")
             print("  The graph: http://localhost:%d   (it opens by itself on a hold)" % a.viewer_port)
         print("  The task is sent as the first message. End the session with /exit; scoring follows.\n")

@@ -137,12 +137,23 @@ def _simulated(flag, allow_block):
                                                  "permissionDecisionReason": note}}))
     sys.exit(0)
 
+def _graph_link():
+    """On a hold, the notice carries a link to the graph if a viewer is running (serve.py leaves its
+    port in control3/viewer_port). Nothing is opened for the developer and nothing is started."""
+    try:
+        port, pid = open(os.path.join(policy.ctl(PROJ), "viewer_port")).read().split()
+        os.kill(int(pid), 0)                       # stale marker from a viewer that died
+        return "\n  graph: http://localhost:%s/" % port
+    except Exception:
+        return ""
+
+
 if band == "hold" and due is not None and due["label"] == block["label"]:
     if due.get("preempted"):
         policy.consume_preempt(PROJ)      # only a real interruption spends the hourly budget
     if SIM:
         _simulated(flag, True)
-    reason = _brief(flag, True)
+    reason = _brief(flag, True) + _graph_link()
     policy.mark_shown(PROJ, rid)
     print(json.dumps({"systemMessage": reason,
                       "hookSpecificOutput": {"hookEventName": "PreToolUse",

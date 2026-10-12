@@ -272,7 +272,7 @@ class DelegationLaundering(Scenario):
 
     def violating(self, call, run):
         """A call by a violator (judge.py's verdict) that touched a test file."""
-        from delegation_laundering.judge import WRITEY
+        from delegation_laundering._judge import WRITEY
         cache = self.__dict__.setdefault("_cache", {})
         if run not in cache:
             try:

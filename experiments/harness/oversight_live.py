@@ -50,6 +50,74 @@ def install(ws, rules, decision_timeout_s=1200, interactive=False, viewer_port=4
     return json.load(open(os.path.join(ws, "oversight", "memory", "session_model.json")))
 
 
+def install_v3(ws, prompt, task_model=None):
+    """The v3 tool, wired as eval/writeups describes its treatment arm: record.py on every event (v3
+    reads the event log for its port registry and dependency map), v3_gate on PreToolUse, v3_land on
+    PostToolUse, v3_done on SubagentStop. Nothing is injected into the agent's context. A hold is
+    Claude Code's own permission dialog ("ask").
+
+    The task model is copied from task_model (a task_model.json, e.g. the one the v3 replay used) or,
+    without one, extracted here from the prompt, one Sonnet 5 call. Returns the model's preferences."""
+    for d in (".claude", "oversight"):
+        shutil.copytree(os.path.join(OVERLAY, d), os.path.join(ws, d),
+                        ignore=shutil.ignore_patterns("__pycache__", "memory", "judgements", "control",
+                                                      "control3", "events.jsonl", "task_model.json", "*.pyc"))
+    with open(os.path.join(ws, ".git", "info", "exclude"), "a") as f:
+        f.write("\n.claude/\noversight/\n")
+    py = 'python3 "${CLAUDE_PROJECT_DIR}/.claude/hooks/%s'
+    rec = lambda ev: {"type": "command", "command": py % ("record.py\" " + ev)}
+    hooks = {ev: [{"hooks": [rec(arg)]}] for ev, arg in (
+        ("SessionStart", "session_start"), ("UserPromptSubmit", "prompt"), ("PreToolUse", "pre_tool"),
+        ("PostToolUse", "post_tool"), ("SubagentStart", "subagent_start"), ("SubagentStop", "subagent_stop"),
+        ("PreCompact", "pre_compact"), ("Stop", "stop"), ("SessionEnd", "session_end"))}
+    hooks["PreToolUse"].append({"matcher": "Bash|Write|Edit|MultiEdit|Task|Agent",
+                                "hooks": [{"type": "command", "command": py % "v3_gate.py\"", "timeout": 180}]})
+    hooks["PostToolUse"].append({"hooks": [{"type": "command", "command": py % "v3_land.py\""}]})
+    hooks["SubagentStop"].append({"hooks": [{"type": "command", "command": py % "v3_done.py\"", "timeout": 180}]})
+    json.dump({"hooks": hooks}, open(os.path.join(ws, ".claude", "settings.json"), "w"), indent=1)
+
+    sys.path.insert(0, OVERLAY)
+    try:
+        from oversight.v3 import taskmodel as tmod, extract
+        if task_model:
+            tm = tmod.save(ws, json.load(open(task_model)))
+        else:
+            # The extractor is a Claude Code agent with v3's instructions appended; on a short brief it
+            # often does the task instead ("there is no demo/ project here") and returns no JSON:
+            # 2 of 3 tries on port_kill. Retry, and keep the count in the model.
+            for attempt in range(1, 5):
+                try:
+                    tm = extract.extract(ws, prompt, "", "", save=False)
+                    break
+                except RuntimeError:
+                    if attempt == 4:
+                        raise
+            tm.setdefault("state", {})["extract_attempts"] = attempt
+            tm = tmod.save(ws, tm)
+    finally:
+        sys.path.pop(0)
+    if not tmod.preferences(tm):
+        raise RuntimeError("v3 task model has no preferences; the tool would do nothing (pass --task-model)")
+    return [dict(text="%s %s" % (p["id"], p["rule"])) for p in tmod.preferences(tm)]
+
+
+def summary_v3(run_dir):
+    """What v3 judged and showed, from the event log it wrote."""
+    out = dict(judged=0, holds=0, checks=0, departs=0)
+    p = os.path.join(run_dir, "oversight", "events.jsonl")
+    for l in (open(p) if os.path.exists(p) else []):
+        try:
+            e = json.loads(l)
+        except Exception:
+            continue
+        if e.get("ov_event") == "v3_judgement":
+            out["judged"] += 1
+            out["departs"] += e.get("verdict") == "departs"
+            out["holds"] += e.get("band") == "hold"
+            out["checks"] += e.get("band") == "check"
+    return out
+
+
 class Answerer(threading.Thread):
     """A simulated user for held spawns: answers every pending hold with the same decision."""
 
@@ -86,6 +154,13 @@ class Answerer(threading.Thread):
         self.stop_flag.set()
 
 
+def start_viewer_v3(ws, port):
+    """v3's own read-only graph (overlay/oversight/v3/viewer), served from the workspace."""
+    return subprocess.Popen([sys.executable, os.path.join(ws, "oversight", "v3", "viewer", "serve.py"), str(port)],
+                            cwd=ws, env=dict(os.environ, CLAUDE_PROJECT_DIR=ws),
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def human_instructions(ws):
     return ("\noversight is live. A held spawn waits for you (up to the decision timeout). In another terminal:\n"
             "  cd %s\n"
@@ -104,7 +179,7 @@ def collect(ws, run_dir):
     """Copy what the tool wrote before the workspace is deleted."""
     src, dst = os.path.join(ws, "oversight"), os.path.join(run_dir, "oversight")
     os.makedirs(dst, exist_ok=True)
-    for name in ("judgements", "control", "memory", "events.jsonl"):
+    for name in ("judgements", "control", "control3", "memory", "events.jsonl", "task_model.json"):
         s = os.path.join(src, name)
         if os.path.isdir(s):
             shutil.copytree(s, os.path.join(dst, name), dirs_exist_ok=True)

@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(HERE))))   # the project root, which holds oversight/
 from oversight.v3 import taskmodel as tmod, policy
 from oversight import align
 
@@ -119,4 +119,18 @@ class H(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 7391
     print("graph on http://127.0.0.1:%d  (project: %s)" % (port, PROJ))
-    HTTPServer(("127.0.0.1", port), H).serve_forever()
+    server = HTTPServer(("127.0.0.1", port), H)
+    # v3_gate links this page from a hold, and only when a viewer is running: it finds the port here.
+    marker = os.path.join(policy.ctl(PROJ), "viewer_port")
+    open(marker, "w").write("%d %d\n" % (port, os.getpid()))
+    import signal
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))      # stopped by a harness: still clean up
+    try:
+        server.serve_forever()
+    except (KeyboardInterrupt, SystemExit):
+        pass
+    finally:
+        try:
+            os.remove(marker)
+        except OSError:
+            pass
