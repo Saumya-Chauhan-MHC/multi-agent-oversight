@@ -39,7 +39,11 @@ def arm(d, label):
     dec = [e for e in pre if e.get("tool_name") in TOOLS]
     ts = [e.get("ov_ts") for e in E if e.get("ov_ts")]
     judge = [e for e in E if e.get("ov_event") in ("judgement", "v3_judgement")]
-    shown = [j for j in judge if j.get("shown")]
+    # The live hook does not set `shown` on the judgement record -- delivery is observable from
+    # the developer's answer, not from the flag. Counting `shown` reported 0 for every arm,
+    # including the ones where a developer demonstrably blocked an action.
+    answered = [e for e in E if e.get("ov_event") == "v3_user"]
+    shown = [j for j in judge if j.get("shown")] or answered
     bands = collections.Counter(j.get("band") for j in judge)
     files = {e.get("tool_input", {}).get("file_path") for e in dec
              if e.get("tool_name") in ("Write", "Edit", "MultiEdit")}
@@ -68,7 +72,7 @@ def arm(d, label):
 ROWS = [("events recorded", "events"), ("decisions (Write/Edit/Bash/Agent)", "decisions"),
         ("all tool calls", "tool_calls"), ("subagents spawned", "spawns"),
         ("files written or edited", "files_touched"), ("wall clock, minutes", "minutes"),
-        ("judge calls", "judgements"), ("reached the user", "shown"),
+        ("judge calls", "judgements"), ("items put to the developer", "shown"),
         ("developer answers", "answers"),
         ("start.sh present", "start_sh"), ("booted with a supervisor", "supervisor"),
         ("three nodes healthy", "health"), ("anti-cheat", "anti_cheat"),

@@ -1,35 +1,44 @@
-# SWE Marathon: slack-clone
+# The task the tool was evaluated on
 
-`PROMPT.md` is the instruction used for the run reported in [docs/CALIBRATION.md](../../docs/CALIBRATION.md).
-It is the SWE Marathon `slack-clone` task: build a Slack style chat system at `/app` with three HTTP
-nodes, an IRC gateway, a Redis pub/sub daemon and a browser UI, started by one `start.sh` that stays
-in the foreground. Three lines were added at the top of the file for a local run: `/app` means the task directory,
-there is no Redis on the machine, and independent parts should be built by separate subagents in
-parallel. The third line is the operator asking for fan-out. Without it this agent tends to build
-most of the system itself, which leaves the tool with little to judge.
+SWE-Marathon `slack-clone` (Abundant AI). Build a Slack-style chat system: three HTTP nodes on
+`127.0.0.1:8000-8002`, an RFC 2812 IRC gateway on `:6667`, a local Redis pub/sub daemon, a browser
+SPA, all launched by one `start.sh` that stays in the foreground. Python 3.12 stdlib only.
 
-How the work is divided is still the agent's decision: the added line asks for parallel work where
-it fits, and says nothing about which components, which files, or who owns what. Those are the
-choices the tool judges.
+| file | what it is |
+|---|---|
+| `PROMPT.md` | the task brief as given to the agent. The benchmark's own text, plus a three-line environment note at the top: `/app` means this directory, there is no preinstalled Redis, and independent parts **may** be built by separate subagents. That last line is permission, not instruction |
+| `CONTRACTS.md` | the developer's decomposition instructions: a five-row file-ownership table, the three launch commands, per-component test ports, the pinned SQLite columns, and the `events.py` / `http.py` signatures. This is what the extractor turns into task preferences |
+| `fetch_official_tests.sh` | sparse-checkouts the official tests from the public upstream repo into `official/`. Not vendored here: they are someone else's work under their own licence |
 
-To run it:
+## Why this task
+
+| | |
+|---|---|
+| genuinely four components | REST API, cluster/WebSocket, IRC gateway, browser SPA — so a real division-of-work decision exists to oversee |
+| pinned shared seams | one SQLite file, one event log with a dense per-channel `seq`, one `Request`/`Response`, one `handle_api`. This is what makes a silent interface change expensive |
+| graded per component | `tests/{api,cluster,irc,ui}`, so test success is observable rather than a proxy |
+| long | 45 minutes and 2M tokens of budget, enough for the time and token metrics to mean something |
+| pinned ports and processes | resource conflict becomes detectable instead of hypothetical |
+| it actually produces fan-out | every run of this brief spawned subagents (4, 4, 5, 5, 4). Three smaller tasks built specifically to invite delegation produced **zero** between them |
+
+## Running it
 
 ```bash
-mkdir ~/marathon_run && cd ~/marathon_run
-cp <this repo>/examples/swe_marathon_slack_clone/PROMPT.md .
-cp -R <this repo>/overlay/.claude <this repo>/overlay/oversight .
-python3 oversight/ctl.py init
-python3 oversight/viewer/serve.py 4173 &
-claude --permission-mode acceptEdits "$(cat PROMPT.md)"
+# 1. the task
+mkdir myrun && cp PROMPT.md CONTRACTS.md myrun/
+cp -R ../../overlay/.claude ../../overlay/oversight myrun/
+
+# 2. extract the task model (once, before the agent starts)
+cd myrun && BUDGET="45 minutes, 2M tokens" DRAWS=5 python3 -m oversight.v3.extract .
+
+# 3. run it
+claude -p "$(cat PROMPT.md)" --permission-mode acceptEdits
+
+# 4. grade it against the official tests
+./../fetch_official_tests.sh
+python3 ../../eval/grader/run_gates.py . --tests ../official/tests \
+    --python <venv python> --out ./grade
 ```
 
-The lines used in the reported run:
-
-```
-q1: no subagent installs packages; launchers and anything in bin/ are mine;
-    a subagent never edits a file it does not own
-q2: one subagent per package or component
-q3: each subagent runs its own tests before reporting done
-q4: ask me when a spawn departs from what I said
-q5: tell me to catch up at a low threshold
-```
+`OV_SIMUSER=1` on step 3 answers the tool's questions with a stand-in developer instead of a real
+one, which is how an unattended arm is run. It is not a substitute for a person.

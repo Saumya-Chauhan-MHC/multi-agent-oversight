@@ -505,6 +505,29 @@ check("the judge may cite a requirement for a departure", _ok and _ok["reqs"] ==
 _bad = judge3._validate(dict(verdict="departs", confidence=0.9, metric="tests",
                              evidence=[dict(req_id="R99", said="x", proposed="y")]), _rq)
 check("but not a requirement id that was never given to it", _bad is None)
+# a verification fact may only cite a requirement whose declared check this file is
+_rq2 = dict(_rq)
+_rq2["requirements"] = _rq["requirements"] + [dict(
+    id="R9", text="Auth works", check="tests/api/test_auth.py",
+    check_files=["tests/api/test_auth.py"], spec_quote="POST /api/auth/register returns 201",
+    status="untested")]
+# the graded unit is a directory, so both api requirements declare this file; the narrowing that
+# bites is coverage -- a requirement the action already exercises cannot be the one being broken
+_act = ("tests/api/test_roles.py  def test_register(self):\n"
+        "    r = call('POST', '/api/auth/register', {'username': u}); assert r.status == 201\n")
+_allow = judge3.allowed_requirements(_rq2, dict(reason="graded_file",
+                                                detail="tests/api/test_roles.py"), _act)
+check("a graded-file trigger may cite any requirement declaring that directory",
+      _allow and set(_allow) == {"R4", "R9"}, _allow)
+check("the ordering offered to the judge puts the least-covered first",
+      [r["id"] for r in judge3._by_coverage(_rq2, _rq2["requirements"], _act)][0] == "R4",
+      [r["id"] for r in judge3._by_coverage(_rq2, _rq2["requirements"], _act)])
+_off = judge3._validate(dict(verdict="departs", confidence=0.9, metric="tests",
+                             evidence=[dict(req_id="R1", said="x", proposed="y")]),
+                        _rq2, allowed_reqs=_allow)
+check("citing a requirement that does not declare this file at all is rejected", _off is None)
+check("a non-verification trigger is not restricted",
+      judge3.allowed_requirements(_rq2, dict(reason="declared_interface", detail="x.py")) is None)
 
 
 # ---- a long test file's table of contents survives truncation ---------------------------------
