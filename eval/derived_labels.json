@@ -1,0 +1,586 @@
+[
+ {
+  "idx": 0,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 1,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 2,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 3,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 4,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 5,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 6,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 7,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 8,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 9,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 10,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 11,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 12,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 13,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 14,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 15,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 16,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 17,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 18,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 19,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 20,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 21,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 22,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 23,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 24,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 25,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 26,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 27,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 28,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 29,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 30,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 31,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 32,
+  "pref": "P2-003",
+  "metric": "tests",
+  "risk": "miscoordination",
+  "band": "hold",
+  "step": "5 hold: 2 live dependents"
+ },
+ {
+  "idx": 33,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 34,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 35,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 36,
+  "pref": "P2-003",
+  "metric": "tests",
+  "risk": "miscoordination",
+  "band": "silent",
+  "step": "4 no dependent yet, so silence"
+ },
+ {
+  "idx": 37,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 38,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 39,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 40,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 41,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 42,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 43,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 44,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 45,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 46,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 47,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 48,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 49,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 50,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 51,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 52,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 53,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 54,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 55,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 56,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 57,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 58,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 59,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 60,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 61,
+  "pref": "P2-002",
+  "metric": "tests",
+  "risk": "miscoordination",
+  "band": "hold",
+  "step": "5 hold: 1 live dependents"
+ },
+ {
+  "idx": 62,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 63,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 64,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 65,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 66,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 67,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 68,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 69,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 70,
+  "pref": "P3-001",
+  "metric": "tests",
+  "risk": "collusion",
+  "band": "hold",
+  "step": "5 hold: deterministic fact in a graded file"
+ },
+ {
+  "idx": 71,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ },
+ {
+  "idx": 72,
+  "pref": null,
+  "metric": null,
+  "risk": null,
+  "band": "silent",
+  "step": "1 no misalignment"
+ }
+]

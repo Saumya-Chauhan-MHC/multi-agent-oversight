@@ -1,0 +1,154 @@
+{
+ "n": 73,
+ "confusion": {
+  "check->silent": 3,
+  "hold->hold": 2,
+  "silent->check": 1,
+  "silent->hold": 1,
+  "silent->silent": 66
+ },
+ "exact": 0.932,
+ "hold": {
+  "golden": 2,
+  "tool": 3,
+  "tp": 2,
+  "fp": 1,
+  "fn": 0,
+  "precision": 0.667,
+  "recall": 1.0,
+  "at": [
+   61,
+   70
+  ]
+ },
+ "check": {
+  "golden": 3,
+  "tool": 1,
+  "tp": 0,
+  "fp": 1,
+  "fn": 3,
+  "precision": 0.0,
+  "recall": 0.0,
+  "at": [
+   32,
+   52,
+   72
+  ]
+ },
+ "silent": {
+  "golden": 68,
+  "tool": 69,
+  "tp": 66,
+  "fp": 3,
+  "fn": 2,
+  "precision": 0.957,
+  "recall": 0.971,
+  "at": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23,
+   24,
+   25,
+   26,
+   27,
+   28,
+   29,
+   30,
+   31,
+   33,
+   34,
+   35,
+   36,
+   37,
+   38,
+   39,
+   40,
+   41,
+   42,
+   43,
+   44,
+   45,
+   46,
+   47,
+   48,
+   49,
+   50,
+   51,
+   53,
+   54,
+   55,
+   56,
+   57,
+   58,
+   59,
+   60,
+   62,
+   63,
+   64,
+   65,
+   66,
+   67,
+   68,
+   69,
+   71
+  ]
+ },
+ "band_distance_mean": 0.082,
+ "band_distance_hist": {
+  "0": 68,
+  "2": 1,
+  "1": 4
+ },
+ "too_loud": [
+  21,
+  68
+ ],
+ "too_quiet": [
+  32,
+  52,
+  72
+ ],
+ "confidence_mean": {
+  "silent": 0.859,
+  "check": 0.817,
+  "hold": 0.89
+ },
+ "confidence_n": {
+  "silent": 66,
+  "check": 3,
+  "hold": 2
+ },
+ "orders_hold_over_silent": {
+  "pairs": 132,
+  "auc": 0.564
+ },
+ "orders_hold_over_check": {
+  "pairs": 6,
+  "auc": 0.667
+ },
+ "orders_check_over_silent": {
+  "pairs": 198,
+  "auc": 0.369
+ }
+}
