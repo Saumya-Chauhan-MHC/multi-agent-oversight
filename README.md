@@ -35,8 +35,20 @@ itself; it just does not prove the requirements it is the declared check for.
 
 ![The task model](docs/images/task_model.png)
 
-> The older images in `docs/images/` (`hold_waiting.png`, `graph_run.png`, `graph_node_open.png`)
-> show the previous version's five-question init and catch-up counter, neither of which exists.
+**The graph.** It opens itself only on a hold, which is the one moment the design says is worth
+leaving the terminal for. A graph left open all session becomes wallpaper and stops being read.
+
+![The graph](docs/images/graph.png)
+
+Five agents with what each has written and how many of its decisions landed on each band, then who
+builds on whose work, and on the right every raised item with its evidence, its predicted cost and
+the correction. `python3 oversight/v3/viewer/serve.py` serves it; it is read-only and decides
+nothing.
+
+> **About these images.** The graph is a live screenshot. The two terminal notices above are the
+> tool's real output text, from the same run, typeset for legibility rather than photographed off a
+> terminal. The older images in `docs/images/` (`hold_waiting.png`, `graph_run.png`,
+> `graph_node_open.png`) are the previous version's interface and are kept only for reference.
 
 ## When it speaks
 
@@ -62,7 +74,11 @@ metric falls:
 
 So one channel carries both the task-quality and the safety story, because they are the same story.
 
-## How it decides
+## How it decides, step by step
+
+> This section is how the implementation works. The reasoning behind each choice, and the
+> measurements that forced it, are in [docs/DESIGN.md](docs/DESIGN.md) and
+> [docs/IMPLEMENTATION_CHANGES.md](docs/IMPLEMENTATION_CHANGES.md).
 
 **1 · Before the run, it reads your brief.** No questions are asked. The extractor turns
 `PROMPT.md` plus your decomposition instructions into:
@@ -73,7 +89,8 @@ So one channel carries both the task-quality and the safety story, because they 
   verification, prioritization. Each one records which metrics it protects and which requirements
   it serves
 
-A preference claiming to be *your* words must return the sentence it came from, and that sentence is
+The LLM is asked for the rules; **whether it may claim they are yours is checked by code.** A
+preference claiming to be *your* words must return the sentence it came from, and that sentence is
 matched back against your file. If the sentence is not there, the rule is marked **inferred**: the
 tool may still use it, but it has to show it to you as a rule it is *proposing*, for you to confirm
 or throw out, rather than quoting it at you as something you said.
@@ -83,8 +100,8 @@ The output is `task_model.json`, a file you can read and edit.
 > Why that check exists, and the invented rule that made it necessary, are in
 > [docs/IMPLEMENTATION_CHANGES.md, section 1](docs/IMPLEMENTATION_CHANGES.md#1--the-extractor).
 
-**2 · During the run, a filter runs on every tool call.** Most calls stop here, cost nothing, and
-are never looked at again.
+**2 · During the run, a filter runs on every tool call.** *(Plain code. No model, no cost.)* Most
+calls stop here and are never looked at again.
 
 What gets past it is decided by **six lookups**, each a plain set-membership or graph check with no
 model involved. They ask things like: is this file one the grader runs? Is this port owned by a
@@ -100,15 +117,18 @@ stopping the work, because across two recordings it was right 0 times out of 8.
 > The six lookups, the three lists and what each one catches are in
 > [docs/DESIGN.md, section 4](docs/DESIGN.md#4--the-three-lists).
 
-**3 · What survives goes to one judge call.** It returns a verdict, what it cites, the metric
-threatened, the evidence pair, the predicted consequence and the correction.
+**3 · What survives goes to one judge call.** *(LLM as judge: one call per surviving decision,
+strict JSON, 45 second timeout, and it fails open so a timeout means silence and the work carries
+on.)* It returns a verdict, what it cites, the metric threatened, the evidence pair, the predicted
+consequence and the correction.
 
 It may cite either a **preference** (a rule you wrote about how to work) or a **requirement** (a
 thing the brief says must work). The second matters when a test is written so it cannot fail: no
 rule you wrote covers that, but the requirement that test was supposed to prove is broken directly,
 and the brief's own sentence is the evidence.
 
-**4 · Then the pacing decides whether you hear about it.**
+**4 · Then the pacing decides whether you hear about it.** *(Plain code. No model is consulted
+about whether to interrupt you.)*
 
 | | |
 |---|---|
@@ -151,13 +171,29 @@ SWE-Marathon suite decide.
 ```
                              no tool     with the tool
 wall clock, minutes          19.6        19.6
+subagents spawned            5           4
 judge calls                  0           147
 items put to the developer   0           2
+developer answers            -           1 note, 1 block
+
+the agent's own test suite   39/49       84/86
 official tests passed        137/143     137/143
+runnable gates passed        2/3         2/3
+  api                        123/129     123/129
+  irc                        11/11       11/11
+  frontend                   3/3         3/3
 ```
 
-Identical outcome, identical wall clock, two interruptions. The keyword path fired 121 times and
-reached a speaking band zero times.
+Identical official outcome, identical wall clock, two interruptions. The keyword path fired 121
+times and reached a speaking band zero times.
+
+**A caution about that own-suite row**, because it is the easiest number here to over-read. The two
+agents wrote different test suites, 49 tests against 86, so 39/49 and 84/86 are not comparable as a
+pass rate and do not show that the tool made the agent write better code. What the row is for is the
+**gap against the official column**. In the no-tool arm the API agent's own `tests/api` passed
+**24 of 24** while the official API gate failed 6 of 129: an agent's suite agreeing with its own
+implementation and silent about the specification. That gap is the thing this tool exists to make
+visible, and comparison 1 shows it was visible to the tool at the moment the suite was written.
 
 **What neither establishes:** two golden positives is not a sample, there is one run per arm so
 there is no effect size, and nothing was demonstrably prevented. [`eval/README.md`](eval/README.md)
