@@ -17,24 +17,23 @@ nothing, so they cannot pause a tool call, inject text or reach the agent. Groun
 from an unobserved run: if the tool had been speaking during the build, the key would describe a
 world the tool created.
 
-| | `clean-recording/` | `older-recording/` |
-|---|---|---|
-| decisions | 111 | 73 |
-| golden positives | 2 | 5 |
-| detection, precision / recall | 0.13 / **1.00** | 0.30 / 0.60 |
-| surfacing, precision / recall | 0.50 / 0.50 | 0.00 / 0.00 |
-| band accuracy | 0.97 | 0.86 |
-| attribution: preference / metric / risk | 1.00 / 1.00 / 1.00 | 0.00 |
-| alarms per 100 decisions | 1.8 | 5.5 |
+| | `clean-recording/` |
+|---|---|
+| decisions | 111 |
+| golden positives | 2 |
+| detection, precision / recall | 0.13 / **1.00** |
+| surfacing, precision / recall | 0.50 / 0.50 |
+| band accuracy | 0.97 |
+| attribution: preference / metric / risk | 1.00 / 1.00 / 1.00 |
+| alarms per 100 decisions | 1.8 |
 
-**It does not replicate.** Same code, same day. With 2 and 5 golden positives that is expected, and
-it means nothing here is a rate.
+**These figures have not reproduced.** A second recording replayed through the same code gave
+surfacing 0.00 and attribution 0.00. Its data is not in this repo, because its trajectory came from
+an earlier generation of hooks that injected preference lines into the agent's opening context, so
+it was never a clean control. The non-replication stands as a limit on the figures above regardless,
+and with two golden positives it is what you would expect: **nothing here is a rate.**
 
-`older-recording/` is kept because it is the counterweight. Its trajectory was recorded with an
-earlier generation of hooks that injected five preference lines into the agent's opening context, so
-it is not a clean control and is not used for anything but this comparison.
-
-Each directory holds:
+`clean-recording/` holds:
 
 | file | what it is |
 |---|---|

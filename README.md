@@ -15,38 +15,28 @@ will cost a measurable success metric** — and stays quiet otherwise, which is 
 Two real notices from a run of the SWE-Marathon `slack-clone` task. Nothing here is mocked.
 
 **A hold.** The IRC agent is about to write a test whose `setUpClass` raises `SkipTest`
-unconditionally, so the bridge assertions can never run:
+unconditionally, so the bridge assertions can never run. The tool call waits for an answer.
 
-```
-[oversight] irc-agent -> tests/irc/test_bridge.py
-  departs from R18
-  the brief says (R18): IRC/web bidirectional message bridging on the shared seq stream
-                        [check: tests/irc/test_bridge.py, untested]
-  cost if it proceeds (tests): The bridge test can raise SkipTest unconditionally at setup, so
-    test_bidirectional_bridge and test_kill_node_keeps_bridging never execute and R18/R14
-    resilience-over-IRC pass silently without being checked.
-  instead: Only skip when the stated precondition is true, and otherwise let setUpClass start
-    the cluster.                                              [cost: a few lines in setUpClass]
-```
+![A hold](docs/images/hold.png)
 
-**A check** — one line, nothing paused, ignoring it is a valid answer. A unit test is fine in
-itself but does not prove the requirements it is the declared check for:
+Note what it cites: a **requirement**, because no rule the developer wrote covers this, and the
+evidence is the brief's own sentence rather than one the tool invented.
 
-```
-[oversight] cluster-agent -> tests/cluster/test_events.py
-  departs from R13, R14
-  the brief says (R14): The grader SIGKILLs one of the three HTTP nodes; the other two must
-                        still answer reads/writes, deliver WebSocket frames, replay across a
-                        reconnect
-  this does:            test_events.py only exercises huddle/events.py directly via unittest,
-                        with no sockets, no multi-node process spawning and no SIGKILL scenario
-  cost if it proceeds (tests): R14's and R13's declared checks remain untested files elsewhere
-  instead: Write tests/cluster/test_resilience.py and tests/cluster/test_ws.py separately
-  (nothing is paused; this is a mention)
-```
+**A check.** One line, nothing paused, ignoring it is a valid answer. The unit test is fine in
+itself; it just does not prove the requirements it is the declared check for.
 
-> **The screenshots in `docs/images/` are from the previous version** and show the five-question
-> init and the catch-up counter, neither of which exists any more. They need recapturing.
+![A check](docs/images/check.png)
+
+**What it is tracking, at a glance.** 147 judgements over the run, of which 135 were silent.
+
+![Status](docs/images/status.png)
+
+**And the model it is judging against**, extracted from the brief before the run and yours to edit.
+
+![The task model](docs/images/task_model.png)
+
+> The older images in `docs/images/` (`hold_waiting.png`, `graph_run.png`, `graph_node_open.png`)
+> show the previous version's five-question init and catch-up counter, neither of which exists.
 
 ## When it speaks
 

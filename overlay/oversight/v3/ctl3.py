@@ -34,10 +34,18 @@ def status(_):
     ev = align.load_events(PROJ)
     dep = tmod.dependency_map(ev)
     print("preferences  %d   requirements %d" % (len(tmod.preferences(tm)), len(tm["requirements"])))
-    print("graded files %s" % (", ".join(sorted(tmod.graded_files(tm))) or "-"))
-    print("registry     %s" % (json.dumps(tmod.registry(ev)) if tmod.registry(ev) else "-"))
-    print("depends on   %s" % (json.dumps({k: sorted(v) for k, v in dep["depends_on"].items() if v})
-                               if any(dep["depends_on"].values()) else "-"))
+    # summarise rather than dump: this surface is meant to be glanced at, and printing 25 paths
+    # and every agent's full dependency list made it unreadable
+    _g = sorted(tmod.graded_files(tm))
+    _d = sorted(tmod.graded_dirs(tm))
+    print("graded       %d files in %s" % (len(_g), ", ".join(_d) or "-"))
+    _reg = tmod.registry(ev)
+    print("registry     %s" % (", ".join("%s -> %s" % (k, v[:9]) for k, v in sorted(_reg.items()))
+                               or "-"))
+    _dep = {k: sorted(v) for k, v in dep["depends_on"].items() if v}
+    print("dependencies %d agent(s): %s"
+          % (len(_dep), ", ".join("%s on %d file(s)" % (k[:9], len(v)) for k, v in sorted(_dep.items()))
+             or "-"))
     blocks = [b for b in policy._blocks(PROJ) if b["status"] == "waiting" and b["members"]]
     print("queue        %d block(s): %s" % (len(blocks), ", ".join("%s x%d" % (b["label"], len(b["members"]))
                                                                    for b in blocks) or "-"))
@@ -63,7 +71,11 @@ def pending(_):
         print("  - %s -> %s" % (m["agent"], m["action"][:92]))
         print("    %s %.2f  metric %s" % (m.get("verdict"), m.get("confidence") or 0, m.get("metric")))
         for e in (m.get("evidence") or [])[:2]:
-            print('      you said (%s): "%s"' % (e.get("pref_id"), str(e.get("said"))[:96]))
+            # a verification departure cites the requirement whose declared check cannot do its
+            # job, not a preference, so the lead-in has to say whose words these are
+            _src = e.get("pref_id") or e.get("req_id")
+            _lead = "you said" if e.get("pref_id") else "the brief says"
+            print('      %s (%s): "%s"' % (_lead, _src, str(e.get("said"))[:96]))
             print("      this does:      %s" % str(e.get("proposed"))[:96])
         if m.get("consequence"):
             print("      cost: %s" % m["consequence"][:110])
