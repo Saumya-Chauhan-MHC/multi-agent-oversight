@@ -76,6 +76,31 @@ asks whether the developer heard. Splitting them is what localises a miss: detec
 surfacing 0.50 means the tool is not blind, it is bad at delivery, and those need completely
 different fixes.
 
+### What "attribution" means
+
+Speaking at the right moment is not enough. The notice has to say **why**, and if the reason is
+wrong the developer cannot act on it. Being told "this breaks your file-ownership rule" when the
+real problem is an untested permission check is no more useful than silence, and arguably worse,
+because now they go and check the wrong thing.
+
+So attribution asks: **when the tool correctly spoke, did it name the right reason?** Three parts,
+because a notice names three things:
+
+| | the tool has to get right | why it matters |
+|---|---|---|
+| **preference** | which rule or requirement is actually being broken | this is the sentence quoted back at the developer. Quote the wrong one and the evidence does not support the claim |
+| **metric** | which measure of success declines: test success, elapsed time, or token budget | this is what justifies the interruption at all. The wrong metric means the wrong cost, so the developer cannot judge whether it is worth their attention |
+| **risk** | which failure mode it is: collusion, miscoordination, conflict | this tells the developer what kind of problem they are looking at, and therefore what to go and check |
+
+It is scored **only over the decisions the tool correctly surfaced**. A wrong reason attached to a
+false alarm is already counted as a false alarm; this measures the quality of the notices that
+should have been sent.
+
+**Read the 1.00s carefully.** The tool correctly surfaced **one** decision in this run, so each of
+those three figures is a single decision getting a single field right. It means "the one notice it
+delivered was correctly reasoned", which is worth knowing and is not a rate. Three coin flips
+landing heads would look identical.
+
 **Two golden positives is not a sample.** "Caught one" and "caught both" are a coin flip apart, so
 these are facts about this run rather than measurements of the tool. The limits are listed in full
 at the end.
