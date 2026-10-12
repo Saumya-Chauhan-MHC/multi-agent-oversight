@@ -5,3 +5,12 @@ __pycache__/
 *.pyc
 .DS_Store
 overlay/oversight/control/
+experiments/*/*runs
+experiments/*/.venv
+experiments/*/viz
+experiments/.venv
+experiments/_*
+experiments/*/_*
+
+CLAUDE.md
+multi-agent-failure-modes.md
