@@ -37,6 +37,7 @@ itself; it just does not prove the requirements it is the declared check for.
 
 **The graph.** It opens itself only on a hold, which is the one moment the design says is worth
 leaving the terminal for. A graph left open all session becomes wallpaper and stops being read.
+[DESIGN section 9](docs/DESIGN.md#the-graph-read-only).
 
 ![The graph](docs/images/graph.png)
 
@@ -163,6 +164,10 @@ back. The evidence that you cannot simply read the trace and find it is fairly b
 So the question is not how to give the developer more control. It is what to show, and when, so a
 compounding error is caught while it is still cheap to undo.
 
+> Each risk, how it is detected and what it costs:
+> [DESIGN section 5](docs/DESIGN.md#5--safety-risks-and-where-they-live). The three conditions that
+> must all hold before anything is said: [DESIGN section 6](docs/DESIGN.md#6--when-surfacing-happens-and-why).
+
 ## Does it work?
 
 Two separate exercises, in [`eval/`](eval/).
@@ -214,9 +219,13 @@ implementation and silent about the specification. That gap is the thing this to
 visible, and comparison 1 shows it was visible to the tool at the moment the suite was written.
 
 **What neither establishes:** two golden positives is not a sample, there is one run per arm so
-there is no effect size, and nothing was demonstrably prevented. [`eval/README.md`](eval/README.md)
-explains both exercises from scratch, states the limits in full, and shows which column of the
-answer key produces each number. The keys and every score are there to be argued with.
+there is no effect size, and nothing was demonstrably prevented.
+
+> [`eval/README.md`](eval/README.md) explains both exercises from scratch and states the limits in
+> full. The answer key is [`eval/control-arm/golden.csv`](eval/control-arm/golden.csv), the run it
+> labels is [`eval/control-arm/`](eval/control-arm/), the run with the tool active is
+> [`eval/treatment-arm/`](eval/treatment-arm/), and both write-ups are in
+> [`eval/writeups/`](eval/writeups/).
 
 ## Install
 
@@ -233,6 +242,10 @@ single draw is not stable. It reports what it dropped.
 `OV_SIMUSER=1` answers the tool's questions with a stand-in developer instead of a real one, for
 running an arm unattended. It is not a substitute for a person.
 
+> What the stand-in is shown, what it is deliberately not shown, and why it exists at all:
+> [DESIGN section 9](docs/DESIGN.md#a-stand-in-developer-for-running-a-treatment-arm-unattended)
+> and [`eval/treatment-arm/README.md`](eval/treatment-arm/README.md).
+
 [`examples/swe_marathon_slack_clone/`](examples/swe_marathon_slack_clone/) has a task to try it on,
 and a script that fetches the real test suite so you can grade whatever gets built.
 
@@ -240,8 +253,17 @@ and a script that fetches the real test suite so you can grade whatever gets bui
 
 | | |
 |---|---|
+| [`docs/DESIGN.md`](docs/DESIGN.md) | the design end to end |
+| &nbsp;&nbsp;[section 4](docs/DESIGN.md#4--the-three-lists) | the three lists the lookups read, and why lists at all |
+| &nbsp;&nbsp;[section 5](docs/DESIGN.md#5--safety-risks-and-where-they-live) | collusion, miscoordination and conflict: how each is detected and what it costs |
+| &nbsp;&nbsp;[section 6](docs/DESIGN.md#6--when-surfacing-happens-and-why) | the three conditions that must hold before anything is said |
+| &nbsp;&nbsp;[section 7](docs/DESIGN.md#7--the-queue-step-by-step) | the queue: one at a time, grouping, the ten-minute window, the ranking, the one preempt |
+| &nbsp;&nbsp;[section 8](docs/DESIGN.md#8--the-orchestration-gap-period) | the four ways the tool is blind, including the cold start and the window |
+| &nbsp;&nbsp;[section 9](docs/DESIGN.md#9--implementation-component-by-component) | component by component: extractor, filter, judge, graph, policy, stand-in developer |
 | [`docs/IMPLEMENTATION_CHANGES.md`](docs/IMPLEMENTATION_CHANGES.md) | every change and what measurement forced it |
-| [`docs/DESIGN.md`](docs/DESIGN.md) | the design end to end: the three lists, the queue, the orchestration gap |
+| &nbsp;&nbsp;[section 1](docs/IMPLEMENTATION_CHANGES.md#1--the-extractor) | the extractor: the truncation, the invented rule, the provenance check |
+| &nbsp;&nbsp;[section 5](docs/IMPLEMENTATION_CHANGES.md#5--bands-and-delivery) | bands and delivery: the check band that printed nothing, word overlap losing its vote |
+| &nbsp;&nbsp;[section 6](docs/IMPLEMENTATION_CHANGES.md#6--the-queue) | the queue: why confidence was removed from the ranking |
 | [`eval/`](eval/) | both comparisons, the answer keys, the scorers and the grader |
 | [`examples/`](examples/) | the SWE-Marathon task, the ProgramBench harness |
 | [`overlay/`](overlay/) | the hooks and the tool itself |
