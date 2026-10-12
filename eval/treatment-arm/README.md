@@ -30,6 +30,8 @@ do".
 
 | file | what it is |
 |---|---|
+| `trajectory.jsonl` | the run's event log, trimmed the same way the control arm's is: every decision plus the session and subagent lifecycle. 161 decisions |
+| `decisions_readable.txt` | the same decisions in human-readable form |
 | `task_model.json` | 25 requirements and 7 preferences, extracted from the brief before the run |
 | `judgements.jsonl` | 149 records: every judgement the tool made, and every answer the stand-in gave. The full event log is not committed; it is large and the judgements are the part anyone needs |
 | `grade_report.json` | the real suite's verdict: 137 of 143, 2 of 3 runnable gates, own suite 84 of 86 |
