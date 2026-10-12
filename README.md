@@ -74,20 +74,39 @@ So one channel carries both the task-quality and the safety story, because they 
   it serves
 
 A preference claiming to be *your* words must return the sentence it came from, and that sentence is
-matched back against your file. If it is not there, the rule is marked **inferred** and has to be
-proposed for confirmation rather than quoted at you as yours.
+matched back against your file. If the sentence is not there, the rule is marked **inferred**: the
+tool may still use it, but it has to show it to you as a rule it is *proposing*, for you to confirm
+or throw out, rather than quoting it at you as something you said.
 
 The output is `task_model.json`, a file you can read and edit.
 
-**2 · During the run, a filter runs on every tool call.** Six deterministic lookups against three
-lists, the graded file set, a port and process registry, and a dependency map rebuilt from events
-*before* the current decision, plus a cheap keyword path that exists only to get borderline
-decisions in front of the judge. **Keyword matching cannot interrupt you**; it has no vote.
+> Why that check exists, and the invented rule that made it necessary, are in
+> [docs/IMPLEMENTATION_CHANGES.md, section 1](docs/IMPLEMENTATION_CHANGES.md#1--the-extractor).
+
+**2 · During the run, a filter runs on every tool call.** Most calls stop here, cost nothing, and
+are never looked at again.
+
+What gets past it is decided by **six lookups**, each a plain set-membership or graph check with no
+model involved. They ask things like: is this file one the grader runs? Is this port owned by a
+different agent? Has somebody already imported the file about to be rewritten? Those lookups read
+**three lists**: the set of files the grader runs, a registry of which agent started which port or
+process, and a map of who depends on whose work, rebuilt from the events *before* the current
+decision so the tool can never benefit from knowing what happens later.
+
+There is also a cheap keyword path, which exists only to get borderline decisions in front of the
+judge when no lookup matched. **Keyword matching cannot interrupt you.** It has no vote on
+stopping the work, because across two recordings it was right 0 times out of 8.
+
+> The six lookups, the three lists and what each one catches are in
+> [docs/DESIGN.md, section 4](docs/DESIGN.md#4--the-three-lists).
 
 **3 · What survives goes to one judge call.** It returns a verdict, what it cites, the metric
-threatened, an evidence pair, the predicted consequence and the correction. It may cite a
-preference **or** a requirement: a declared check that cannot do its job breaks the requirement
-directly, which needs no invented rule.
+threatened, the evidence pair, the predicted consequence and the correction.
+
+It may cite either a **preference** (a rule you wrote about how to work) or a **requirement** (a
+thing the brief says must work). The second matters when a test is written so it cannot fail: no
+rule you wrote covers that, but the requirement that test was supposed to prove is broken directly,
+and the brief's own sentence is the evidence.
 
 **4 · Then the pacing decides whether you hear about it.**
 
@@ -96,11 +115,15 @@ directly, which needs no invented rule.
 | **one at a time** | everything goes into a queue and you get one recommendation, not a feed |
 | **grouped** | items citing the same preference or requirement become one block, so three agents breaking one contract is one interruption. Each flag inside keeps its own evidence and correction |
 | **ten minutes of quiet** | after anything reaches you, nothing else can for 600 seconds |
-| **ranked, not first-come** | the slot goes to the most deterministic finding, not the most confident one. Confidence is not in the ranking at all: measured at AUC 0.09, 0.52 and 0.67 across three runs, where 0.5 is no information |
+| **ranked, not first-come** | the slot goes to the finding with the hardest evidence behind it, not the one the judge felt surest about. The judge's confidence is not used in the ranking at all, because it turned out not to track importance: across three measurements it ordered decisions at 0.09, 0.52 and 0.67 on a scale where 0.5 means no information |
 | **one exception** | a shared interface about to change under agents already building on it can break the silence, at most once an hour, because no later correction fixes it |
 
 A **hold** pauses the tool call and asks. A **check** prints the same evidence chain and pauses
-nothing. Everything else is recorded and shown to nobody.
+nothing, and ignoring it is a valid answer. Everything else is recorded and shown to nobody.
+
+> Why the queue is ranked that way, why the quiet window keys on what was *shown* rather than what
+> was *answered*, and where the tool is blind, are in
+> [docs/DESIGN.md, sections 7 and 8](docs/DESIGN.md#7--the-queue-step-by-step).
 
 ## Does it work?
 
@@ -136,10 +159,10 @@ official tests passed        137/143     137/143
 Identical outcome, identical wall clock, two interruptions. The keyword path fired 121 times and
 reached a speaking band zero times.
 
-**What neither establishes:** two golden positives is not a sample, comparison 1 did not replicate
-on a second recording, there is one run per arm so there is no effect size, and nothing was
-demonstrably prevented. [`eval/README.md`](eval/README.md) states the limits in full, and the
-answer keys and every score are there to be argued with.
+**What neither establishes:** two golden positives is not a sample, there is one run per arm so
+there is no effect size, and nothing was demonstrably prevented. [`eval/README.md`](eval/README.md)
+explains both exercises from scratch, states the limits in full, and shows which column of the
+answer key produces each number. The keys and every score are there to be argued with.
 
 ## Install
 
