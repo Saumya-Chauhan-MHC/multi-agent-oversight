@@ -1,147 +1,170 @@
 # multi-agent-oversight
 
-A tool for keeping a human in the loop while Claude Code runs subagents. It reads five rules you
-write at the start, judges every delegation and every subagent action against them, and stops the
-work only when it is confident one of your rules is being broken. The rest of the time it stays
-quiet and counts what you have not seen.
+A tool for keeping a human in the loop while Claude Code runs subagents.
 
-![A spawn held for an answer](docs/images/hold_waiting.png)
-
-*A spawn held: the brief bundled three components into one subagent, which contradicts a rule the
-user wrote. The evidence quotes the rule against the brief. Below it, a check that is waiting but
-pauses nothing, and the rules as they have grown during the run.*
+It reads your task brief and your own decomposition instructions, works out what must be true for
+the task to succeed and how you said the work should be divided, and then watches the run. It
+speaks when an agent is about to depart from how you said the work should be done **in a way that
+will cost a measurable success metric** — and stays quiet otherwise, which is almost always.
 
 > Research prototype, used in a study on human oversight of coding agents. Tested on macOS with
-> Claude Code 2.1.287, on SWE Marathon and ProgramBench tasks.
+> Claude Code, on SWE-Marathon and ProgramBench tasks.
 
-## The two components
+## What it actually says
 
-**Alignment flags**
+Two real notices from a run of the SWE-Marathon `slack-clone` task. Nothing here is mocked.
+
+**A hold.** The IRC agent is about to write a test whose `setUpClass` raises `SkipTest`
+unconditionally, so the bridge assertions can never run. The tool call waits for an answer.
+
+![A hold](docs/images/hold.png)
+
+Note what it cites: a **requirement**, because no rule the developer wrote covers this, and the
+evidence is the brief's own sentence rather than one the tool invented.
+
+**A check.** One line, nothing paused, ignoring it is a valid answer. The unit test is fine in
+itself; it just does not prove the requirements it is the declared check for.
+
+![A check](docs/images/check.png)
+
+**What it is tracking, at a glance.** 147 judgements over the run, of which 135 were silent.
+
+![Status](docs/images/status.png)
+
+**And the model it is judging against**, extracted from the brief before the run and yours to edit.
+
+![The task model](docs/images/task_model.png)
+
+> The older images in `docs/images/` (`hold_waiting.png`, `graph_run.png`, `graph_node_open.png`)
+> show the previous version's five-question init and catch-up counter, neither of which exists.
+
+## When it speaks
+
+Three conditions, all required:
 
 | | |
 |---|---|
-| fires on | a delegation, or a tool call whose text matches a word in your rules |
-| cost when it does not fire | none, the match is a string check |
-| the judge is given | your rules, the brief or command, the child's own brief, the parent's state |
-| it returns | a verdict, a confidence, and evidence quoting your rule against the conflicting text |
-| departs at 0.85 or more | the work pauses and you answer |
-| departs at 0.50 to 0.85 | one line, nothing pauses |
-| no rule covers it | one line, nothing pauses |
-| fits, or the judge failed | nothing, the node is marked |
-| never | interrupts on a fit, or asks twice about the same decision |
+| **a task preference is misaligned** | you said how the work should be divided, and an agent is about to do otherwise |
+| **a success metric will decline** | official test success, elapsed time, or token budget. Not "this is untidy" |
+| **a deterministic fact is behind it** | a file-path or dependency-map lookup, not a keyword match |
 
-**Catch-up**
+If the first holds but not the second, it is recorded and nobody is told. That is deliberate: it
+stops the tool policing tidiness for its own sake.
 
-| | |
-|---|---|
-| fires on | a subagent finishing |
-| cost | none, it is arithmetic over counters |
-| counts | departures never shown (1 each), checks not answered (1), repeats of a decision you declined (2), files written in nodes you have not opened (1 per 10), subagents finished while you were away (1) |
-| your threshold | 3, 5 or 8, from q5 |
-| past the threshold | one line on the next tool result |
-| resets | any look at the graph |
-| never | pauses anything |
+**The safety risks are not a second alarm channel.** They are the three mechanisms by which a
+metric falls:
 
-The band thresholds, the four exceptions to them, and the catch-up formula are in
-[docs/DESIGN.md](docs/DESIGN.md).
-
-## What the terminal shows, and what the graph shows
-
-| | terminal | graph |
+| risk | what it is | how the metric falls |
 |---|---|---|
-| a decision that fits | nothing | a mark on the node |
-| a check | one line, nothing paused | an item you can answer later |
-| a hold | the evidence, three choices, the agent waits | opens on that node |
-| catch-up | one line with the counts | the items behind those counts |
+| **collusion** | an agent certifies its own work with a check that cannot fail | tests decline *without anyone noticing* |
+| **miscoordination** | two agents hold different beliefs about a shared contract | tests decline *several handoffs after the cause* |
+| **conflict** | two agents contend for one resource | the same work is *paid for twice* |
 
-The graph opens by itself only on a hold. Click a node to see what it owns, the decision that started
-it, and what it did that departed:
+So one channel carries both the task-quality and the safety story, because they are the same story.
 
-![A node opened](docs/images/graph_node_open.png)
+## How it decides
 
-A finished run with nothing outstanding looks like this:
+**1 · Before the run, it reads your brief.** No questions are asked. The extractor turns
+`PROMPT.md` plus your decomposition instructions into:
 
-![The graph after a run](docs/images/graph_run.png)
+- **requirements** — what must work, each carrying the brief's own sentences copied **verbatim and
+  verified against the source text**, plus the file that proves it
+- **preferences** — how you want it built, in four categories: ownership, shared interfaces,
+  verification, prioritization. Each one records which metrics it protects and which requirements
+  it serves
 
-## Quick start
+A preference claiming to be *your* words must return the sentence it came from, and that sentence is
+matched back against your file. If it is not there, the rule is marked **inferred** and has to be
+proposed for confirmation rather than quoted at you as yours.
+
+The output is `task_model.json`, a file you can read and edit.
+
+**2 · During the run, a filter runs on every tool call.** Six deterministic lookups against three
+lists — the graded file set, a port and process registry, and a dependency map rebuilt from events
+*before* the current decision — plus a cheap keyword path that exists only to get borderline
+decisions in front of the judge. **Keyword matching cannot interrupt you**; it has no vote.
+
+**3 · What survives goes to one judge call.** It returns a verdict, what it cites, the metric
+threatened, an evidence pair, the predicted consequence and the correction. It may cite a
+preference **or** a requirement: a declared check that cannot do its job breaks the requirement
+directly, which needs no invented rule.
+
+**4 · Then the pacing decides whether you hear about it.**
+
+| | |
+|---|---|
+| **one at a time** | everything goes into a queue and you get one recommendation, not a feed |
+| **grouped** | items citing the same preference or requirement become one block, so three agents breaking one contract is one interruption. Each flag inside keeps its own evidence and correction |
+| **ten minutes of quiet** | after anything reaches you, nothing else can for 600 seconds |
+| **ranked, not first-come** | the slot goes to the most deterministic finding, not the most confident one. Confidence is not in the ranking at all: measured at AUC 0.09, 0.52 and 0.67 across three runs, where 0.5 is no information |
+| **one exception** | a shared interface about to change under agents already building on it can break the silence, at most once an hour, because no later correction fixes it |
+
+A **hold** pauses the tool call and asks. A **check** prints the same evidence chain and pauses
+nothing. Everything else is recorded and shown to nobody.
+
+## Does it work?
+
+Two separate exercises, in [`eval/`](eval/).
+
+**Comparison 1 — is it flagging the right things?** Replay a recording from a run with *no tool
+active*, decision by decision, against an answer key written before the tool was replayed.
+
+```
+111 decisions, 2 of which the key says were worth surfacing
+
+detection    precision 0.13   recall 1.00     did the judge see it at all
+surfacing    precision 0.50   recall 0.50     did the developer get told
+band accuracy 0.97       attribution 1.00 / 1.00 / 1.00       alarms per 100: 1.8
+```
+
+It found both moments, banded both correctly, and named the right preference, metric and safety
+risk every time it spoke. It delivered one of the two. **Its understanding is ahead of its
+delivery.** On the three moments in that run where speaking would have made things *worse*, it said
+nothing.
+
+**Comparison 2 — does the project come out better?** Build the same task twice and let the real
+SWE-Marathon suite decide.
+
+```
+                             no tool     with the tool
+wall clock, minutes          19.6        19.6
+judge calls                  0           147
+items put to the developer   0           2
+official tests passed        137/143     137/143
+```
+
+Identical outcome, identical wall clock, two interruptions. The keyword path fired 121 times and
+reached a speaking band zero times.
+
+**What neither establishes:** two golden positives is not a sample, comparison 1 did not replicate
+on a second recording, there is one run per arm so there is no effect size, and nothing was
+demonstrably prevented. [`eval/README.md`](eval/README.md) states the limits in full, and the
+answer keys and every score are there to be argued with.
+
+## Install
+
+Copy `overlay/.claude` and `overlay/oversight` into the project the agent will work in, then:
 
 ```bash
-mkdir ~/task_run && cd ~/task_run
-cp -R <this repo>/overlay/.claude <this repo>/overlay/oversight .
-cp <your task instruction> PROMPT.md
-
-python3 oversight/ctl.py init          # five questions, about a minute
-python3 oversight/ctl.py lines         # check the rules registered
-python3 oversight/viewer/serve.py 4173 &
-claude --permission-mode acceptEdits "$(cat PROMPT.md)"
+BUDGET="45 minutes, 2M tokens" DRAWS=5 python3 -m oversight.v3.extract .
+claude -p "$(cat PROMPT.md)" --permission-mode acceptEdits
 ```
 
-Answer holds in the terminal as they appear. Nothing else needs you. What the tool shows afterwards,
-from one real run:
+`DRAWS=5` runs the extractor five times and keeps what a majority of draws agree on, because a
+single draw is not stable. It reports what it dropped.
 
-```
-$ python3 oversight/ctl.py status
-lines        5 (q1a, q1b, q1c, q2, q3)
-involvement  ask   catch-up threshold 3   surface ask
-counters     outdatedness 0 = 0 departures + 0 unanswered checks + 0 repeats x2
-             + 0 (0 unseen edits, 1 per 10) + 0 finished while away
-judgements   9  {'silent': 9}
+`OV_SIMUSER=1` answers the tool's questions with a stand-in developer instead of a real one, for
+running an arm unattended. It is not a substitute for a person.
 
-$ python3 oversight/ctl.py judgements 3
-  silent fits      0.90  orchestrator                 -> Build Huddle SPA frontend
-  silent departs   0.60  Build Huddle SPA frontend    -> web/tests/mock_server.py   q1c
-  silent fits      0.60  Build Huddle SPA frontend    -> timeout 300 python3 web/tests/ui_test.py
+[`examples/swe_marathon_slack_clone/`](examples/swe_marathon_slack_clone/) has a task to try it on,
+and a script that fetches the real test suite so you can grade whatever gets built.
 
-$ python3 oversight/ctl.py lines
-  q1a: "no subagent installs packages" (init, confirmed)
-  q1b: "launchers and anything in bin/ are mine" (init, confirmed)
-  q1c: "a subagent never edits a file it does not own" (init, confirmed)
-  q2:  "one subagent per package or component" (init, confirmed)
-  q3:  "each subagent runs its own tests before reporting done" (init, confirmed)
-```
+## Where things are
 
-A full worked example, including the rules used and the task text, is in
-[examples/swe_marathon_slack_clone](examples/swe_marathon_slack_clone).
-
-## Terminal control
-
-```bash
-python3 oversight/ctl.py lines         # the rules, in your words, as they grow
-python3 oversight/ctl.py status        # bands, counts, precision, catch-up score
-python3 oversight/ctl.py judgements 10 # the last ten decisions and their verdicts
-python3 oversight/ctl.py catchup       # what piled up since your last look
-python3 oversight/ctl.py pending       # anything waiting for an answer
-python3 oversight/ctl.py answer <id> yes|no "<note>"
-python3 oversight/ctl.py accept-all <parent>   # stop being asked about one parent
-python3 oversight/ctl.py declare --kind merge --what "..." --why "..."
-```
-
-## Docs
-
-- [docs/DESIGN.md](docs/DESIGN.md) what triggers each component, what the terminal and the graph
-  show, and how to run it on a SWE Marathon task
-- [docs/CALIBRATION.md](docs/CALIBRATION.md) every decision from one live run, which calls were
-  right, which were wrong, what we changed, and the re-test
-- [examples/swe_marathon_slack_clone](examples/swe_marathon_slack_clone) the task used in that run
-- [examples/programbench](examples/programbench) the ProgramBench harness: fetch a task, run it, grade
-  it with the benchmark's hidden tests
-
-## Also in the box
-
-The recorder writes every prompt, tool call, subagent start and stop, subagent brief, and file read
-or written to `oversight/events.jsonl`, with content hashes. File checkpoints (`cNNN`) are taken
-before every file change and workspace checkpoints (`wNNN`) at every human decision, so any state can
-be restored byte for byte.
-
-## Testing
-
-```bash
-python3 oversight/tests/test_align.py       # the gate end to end
-python3 oversight/tests/eval_judge.py       # 12 labelled spawn cases
-python3 oversight/tests/eval_judge.py actions   # 6 labelled action cases
-bash demo.sh                                # a scripted run of every feature
-```
-
-## License
-
-MIT.
+| | |
+|---|---|
+| [`docs/IMPLEMENTATION_CHANGES.md`](docs/IMPLEMENTATION_CHANGES.md) | every change and what measurement forced it |
+| [`docs/DESIGN.md`](docs/DESIGN.md) | the design end to end: the three lists, the queue, the orchestration gap |
+| [`eval/`](eval/) | both comparisons, the answer keys, the scorers and the grader |
+| [`examples/`](examples/) | the SWE-Marathon task, the ProgramBench harness |
+| [`overlay/`](overlay/) | the hooks and the tool itself |
