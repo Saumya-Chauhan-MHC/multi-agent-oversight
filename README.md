@@ -66,13 +66,15 @@ stops the tool policing tidiness for its own sake.
 **The safety risks are not a second alarm channel.** They are the three mechanisms by which a
 metric falls:
 
-| risk | what it is | how the metric falls |
-|---|---|---|
-| **collusion** | an agent certifies its own work with a check that cannot fail | tests decline *without anyone noticing* |
-| **miscoordination** | two agents hold different beliefs about a shared contract | tests decline *several handoffs after the cause* |
-| **conflict** | two agents contend for one resource | the same work is *paid for twice* |
+| risk | what it is | how the metric falls | where it comes from |
+|---|---|---|---|
+| **collusion** | an agent certifies its own work with a check that cannot fail | tests decline *without anyone noticing* | *VisibleBench*, arXiv 2510.20270 |
+| **miscoordination** | two agents hold different beliefs about a shared contract | tests decline *several handoffs after the cause* | *Passes Alone Fails Together*, arXiv 2609.25396: 97% interference between agents sharing an interface, near zero between unrelated ones |
+| **conflict** | two agents contend for one resource | the same work is *paid for twice* | *Worse Together*, arXiv 2610.00583: peer-to-peer teams reach 12 to 30% of optimal |
 
 So one channel carries both the task-quality and the safety story, because they are the same story.
+[docs/DESIGN.md section 5](docs/DESIGN.md#5--safety-risks-and-where-they-live) has how each one is
+detected and what it costs.
 
 ## How it decides, step by step
 
@@ -134,7 +136,7 @@ about whether to interrupt you.)*
 |---|---|
 | **one at a time** | everything goes into a queue and you get one recommendation, not a feed |
 | **grouped** | items citing the same preference or requirement become one block, so three agents breaking one contract is one interruption. Each flag inside keeps its own evidence and correction |
-| **ten minutes of quiet** | after anything reaches you, nothing else can for 600 seconds |
+| **ten minutes of quiet** | after anything reaches you, nothing else can for 600 seconds. Volume is a risk on its own: override rates rise with alert count regardless of whether the alerts are correct (Ancker et al. 2017) |
 | **ranked, not first-come** | the slot goes to the finding with the hardest evidence behind it, not the one the judge felt surest about. The judge's confidence is not used in the ranking at all, because it turned out not to track importance: across three measurements it ordered decisions at 0.09, 0.52 and 0.67 on a scale where 0.5 means no information |
 | **one exception** | a shared interface about to change under agents already building on it can break the silence, at most once an hour, because no later correction fixes it |
 
@@ -144,6 +146,22 @@ nothing, and ignoring it is a valid answer. Everything else is recorded and show
 > Why the queue is ranked that way, why the quiet window keys on what was *shown* rather than what
 > was *answered*, and where the tool is blind, are in
 > [docs/DESIGN.md, sections 7 and 8](docs/DESIGN.md#7--the-queue-step-by-step).
+
+## Why bother
+
+A single agent's mistake is local. In a multi-agent run it compounds: a bad division of work is
+inherited by every subagent under it, and by the time a test fails the cause is several handoffs
+back. The evidence that you cannot simply read the trace and find it is fairly blunt.
+
+| finding | source |
+|---|---|
+| attributing a multi-agent failure to the step that caused it reaches **14.2%** accuracy | Who&When |
+| participants spent about 10 of 15 minutes reading message history before acting; 2 of 8 reached the right answer | AGDebugger, Epperson et al., CHI 2025 |
+| richer plan-editing controls raised editing interactions and did **not** raise plan quality | AMBIPOM |
+| below roughly **0.70** precision, an alert aid leaves the operator worse off than no aid | Dixon and Wickens 2006 |
+
+So the question is not how to give the developer more control. It is what to show, and when, so a
+compounding error is caught while it is still cheap to undo.
 
 ## Does it work?
 
