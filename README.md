@@ -37,6 +37,7 @@ itself; it just does not prove the requirements it is the declared check for.
 
 **The graph.** It opens itself only on a hold, which is the one moment the design says is worth
 leaving the terminal for. A graph left open all session becomes wallpaper and stops being read.
+[DESIGN section 9](docs/DESIGN.md#the-graph-read-only).
 
 ![The graph](docs/images/graph.png)
 
@@ -66,13 +67,15 @@ stops the tool policing tidiness for its own sake.
 **The safety risks are not a second alarm channel.** They are the three mechanisms by which a
 metric falls:
 
-| risk | what it is | how the metric falls |
-|---|---|---|
-| **collusion** | an agent certifies its own work with a check that cannot fail | tests decline *without anyone noticing* |
-| **miscoordination** | two agents hold different beliefs about a shared contract | tests decline *several handoffs after the cause* |
-| **conflict** | two agents contend for one resource | the same work is *paid for twice* |
+| risk | what it is | how the metric falls | where it comes from |
+|---|---|---|---|
+| **collusion** | an agent certifies its own work with a check that cannot fail | tests decline *without anyone noticing* | *VisibleBench*, arXiv 2510.20270 |
+| **miscoordination** | two agents hold different beliefs about a shared contract | tests decline *several handoffs after the cause* | *Passes Alone Fails Together*, arXiv 2609.25396: 97% interference between agents sharing an interface, near zero between unrelated ones |
+| **conflict** | two agents contend for one resource | the same work is *paid for twice* | *Worse Together*, arXiv 2610.00583: peer-to-peer teams reach 12 to 30% of optimal |
 
 So one channel carries both the task-quality and the safety story, because they are the same story.
+[docs/DESIGN.md section 5](docs/DESIGN.md#5--safety-risks-and-where-they-live) has how each one is
+detected and what it costs.
 
 ## How it decides, step by step
 
@@ -134,7 +137,7 @@ about whether to interrupt you.)*
 |---|---|
 | **one at a time** | everything goes into a queue and you get one recommendation, not a feed |
 | **grouped** | items citing the same preference or requirement become one block, so three agents breaking one contract is one interruption. Each flag inside keeps its own evidence and correction |
-| **ten minutes of quiet** | after anything reaches you, nothing else can for 600 seconds |
+| **ten minutes of quiet** | after anything reaches you, nothing else can for 600 seconds. Volume is a risk on its own: override rates rise with alert count regardless of whether the alerts are correct (Ancker et al. 2017) |
 | **ranked, not first-come** | the slot goes to the finding with the hardest evidence behind it, not the one the judge felt surest about. The judge's confidence is not used in the ranking at all, because it turned out not to track importance: across three measurements it ordered decisions at 0.09, 0.52 and 0.67 on a scale where 0.5 means no information |
 | **one exception** | a shared interface about to change under agents already building on it can break the silence, at most once an hour, because no later correction fixes it |
 
@@ -144,6 +147,26 @@ nothing, and ignoring it is a valid answer. Everything else is recorded and show
 > Why the queue is ranked that way, why the quiet window keys on what was *shown* rather than what
 > was *answered*, and where the tool is blind, are in
 > [docs/DESIGN.md, sections 7 and 8](docs/DESIGN.md#7--the-queue-step-by-step).
+
+## Why bother
+
+A single agent's mistake is local. In a multi-agent run it compounds: a bad division of work is
+inherited by every subagent under it, and by the time a test fails the cause is several handoffs
+back. The evidence that you cannot simply read the trace and find it is fairly blunt.
+
+| finding | source |
+|---|---|
+| attributing a multi-agent failure to the step that caused it reaches **14.2%** accuracy | Who&When |
+| participants spent about 10 of 15 minutes reading message history before acting; 2 of 8 reached the right answer | AGDebugger, Epperson et al., CHI 2025 |
+| richer plan-editing controls raised editing interactions and did **not** raise plan quality | AMBIPOM |
+| below roughly **0.70** precision, an alert aid leaves the operator worse off than no aid | Dixon and Wickens 2006 |
+
+So the question is not how to give the developer more control. It is what to show, and when, so a
+compounding error is caught while it is still cheap to undo.
+
+> Each risk, how it is detected and what it costs:
+> [DESIGN section 5](docs/DESIGN.md#5--safety-risks-and-where-they-live). The three conditions that
+> must all hold before anything is said: [DESIGN section 6](docs/DESIGN.md#6--when-surfacing-happens-and-why).
 
 ## Does it work?
 
@@ -196,9 +219,13 @@ implementation and silent about the specification. That gap is the thing this to
 visible, and comparison 1 shows it was visible to the tool at the moment the suite was written.
 
 **What neither establishes:** two golden positives is not a sample, there is one run per arm so
-there is no effect size, and nothing was demonstrably prevented. [`eval/README.md`](eval/README.md)
-explains both exercises from scratch, states the limits in full, and shows which column of the
-answer key produces each number. The keys and every score are there to be argued with.
+there is no effect size, and nothing was demonstrably prevented.
+
+> [`eval/README.md`](eval/README.md) explains both exercises from scratch and states the limits in
+> full. The answer key is [`eval/control-arm/golden.csv`](eval/control-arm/golden.csv), the run it
+> labels is [`eval/control-arm/`](eval/control-arm/), the run with the tool active is
+> [`eval/treatment-arm/`](eval/treatment-arm/), and both write-ups are in
+> [`eval/writeups/`](eval/writeups/).
 
 ## Install
 
@@ -215,6 +242,10 @@ single draw is not stable. It reports what it dropped.
 `OV_SIMUSER=1` answers the tool's questions with a stand-in developer instead of a real one, for
 running an arm unattended. It is not a substitute for a person.
 
+> What the stand-in is shown, what it is deliberately not shown, and why it exists at all:
+> [DESIGN section 9](docs/DESIGN.md#a-stand-in-developer-for-running-a-treatment-arm-unattended)
+> and [`eval/treatment-arm/README.md`](eval/treatment-arm/README.md).
+
 [`examples/swe_marathon_slack_clone/`](examples/swe_marathon_slack_clone/) has a task to try it on,
 and a script that fetches the real test suite so you can grade whatever gets built.
 
@@ -222,8 +253,17 @@ and a script that fetches the real test suite so you can grade whatever gets bui
 
 | | |
 |---|---|
+| [`docs/DESIGN.md`](docs/DESIGN.md) | the design end to end |
+| &nbsp;&nbsp;[section 4](docs/DESIGN.md#4--the-three-lists) | the three lists the lookups read, and why lists at all |
+| &nbsp;&nbsp;[section 5](docs/DESIGN.md#5--safety-risks-and-where-they-live) | collusion, miscoordination and conflict: how each is detected and what it costs |
+| &nbsp;&nbsp;[section 6](docs/DESIGN.md#6--when-surfacing-happens-and-why) | the three conditions that must hold before anything is said |
+| &nbsp;&nbsp;[section 7](docs/DESIGN.md#7--the-queue-step-by-step) | the queue: one at a time, grouping, the ten-minute window, the ranking, the one preempt |
+| &nbsp;&nbsp;[section 8](docs/DESIGN.md#8--the-orchestration-gap-period) | the four ways the tool is blind, including the cold start and the window |
+| &nbsp;&nbsp;[section 9](docs/DESIGN.md#9--implementation-component-by-component) | component by component: extractor, filter, judge, graph, policy, stand-in developer |
 | [`docs/IMPLEMENTATION_CHANGES.md`](docs/IMPLEMENTATION_CHANGES.md) | every change and what measurement forced it |
-| [`docs/DESIGN.md`](docs/DESIGN.md) | the design end to end: the three lists, the queue, the orchestration gap |
+| &nbsp;&nbsp;[section 1](docs/IMPLEMENTATION_CHANGES.md#1--the-extractor) | the extractor: the truncation, the invented rule, the provenance check |
+| &nbsp;&nbsp;[section 5](docs/IMPLEMENTATION_CHANGES.md#5--bands-and-delivery) | bands and delivery: the check band that printed nothing, word overlap losing its vote |
+| &nbsp;&nbsp;[section 6](docs/IMPLEMENTATION_CHANGES.md#6--the-queue) | the queue: why confidence was removed from the ranking |
 | [`eval/`](eval/) | both comparisons, the answer keys, the scorers and the grader |
 | [`examples/`](examples/) | the SWE-Marathon task, the ProgramBench harness |
 | [`overlay/`](overlay/) | the hooks and the tool itself |
