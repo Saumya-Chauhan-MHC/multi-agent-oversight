@@ -1,0 +1,1558 @@
+====================================================================================================
+idx 0    orchestra Bash   Inspect directory, timer and available tooling
+  cmd: ls -la && bash timer.sh 2>/dev/null; which python3 node redis-server go cargo; python3 --version; node --version; python3 -c "import aiohttp, websockets" 2>&1; pip3 list 2>/dev/null | grep -iE "aiohttp|fastapi|uvicorn|websockets|starlette|redis" 
+====================================================================================================
+idx 1    orchestra Bash   List the working directory
+  cmd: ls -la /Users/saumya/research/arm_e_final
+====================================================================================================
+idx 2    orchestra Bash   Inspect oversight and config directories
+  cmd: ls -la /Users/saumya/research/arm_e_final/oversight /Users/saumya/research/arm_e_final/.claude; cat /Users/saumya/research/arm_e_final/.start_time; diff /Users/saumya/research/arm_e_final/CONTRACTS.md /Users/saumya/research/arm_e_final/INSTRUCTIONS.md && echo same
+====================================================================================================
+idx 3    orchestra Bash   Check Python version and time remaining
+  cmd: python3 --version; which redis-server node; echo $(( ( $(cat /Users/saumya/research/arm_e_final/.start_time) + 14400 - $(date +%s) ) / 60 )) min left
+====================================================================================================
+idx 4    orchestra Bash   Check Python version and tools
+  cmd: python3 --version; which redis-server node
+====================================================================================================
+idx 5    orchestra Bash   Create package skeleton directories
+  cmd: mkdir -p /Users/saumya/research/arm_e_final/huddle/{api,web,irc,static} /Users/saumya/research/arm_e_final/tests/{api,cluster,irc,ui} /Users/saumya/research/arm_e_final/bin && cd /Users/saumya/research/arm_e_final && touch huddle/__init__.py huddle/api/__init__.py huddle/web/__init__.py huddle/irc/__init__.py tests/__init__.py tests/api/__init__.py tests/cluster/__init__.py tests/irc/__init__.py t
+====================================================================================================
+idx 6    orchestra Bash   Create package skeleton directories
+  cmd: mkdir -p huddle/api huddle/web huddle/irc huddle/static tests/api tests/cluster tests/irc tests/ui bin && touch huddle/__init__.py huddle/api/__init__.py huddle/web/__init__.py huddle/irc/__init__.py tests/__init__.py tests/api/__init__.py tests/cluster/__init__.py tests/irc/__init__.py tests/ui/__init__.py
+====================================================================================================
+idx 7    orchestra Write  huddle/config.py
+  bytes: 1158
+  body: """Cluster configuration. Env overrides: HUDDLE_DATA, HUDDLE_BASE_PORT, HUDDLE_REDIS_PORT, HUDDLE_IRC_PORT."""
+        import os
+        import sqlite3
+        
+        ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        DATA_DIR = os.environ.get("HUDDLE_DATA", os.path.join(ROOT, "data"))
+        DB_PATH = os.path.join(DATA_DIR, "huddle.db")
+        FILES_DIR = os.path.join(DATA_DIR, "files")
+        STATIC_DIR = os.path.join(ROOT, "huddle", "static")
+        
+        HOST = "127.0.0.1"
+        BASE_PORT = int(os.environ.get("HUDDLE_BASE_PORT", "8000"))
+        NUM_N
+====================================================================================================
+idx 8    orchestra Write  huddle/web/http.py
+  bytes: 1388
+  body: """HTTP plumbing shared by the node server and the API (see CONTRACTS.md)."""
+        import json
+        
+        
+        class Request:
+            def __init__(self, method="GET", path="/", query=None, headers=None, body=b"", node_id=0):
+                self.method = method.upper()
+                self.path = path
+                self.query = dict(query or {})
+                self.headers = {k.lower(): v for k, v in (headers or {}).items()}
+                self.body = body or b""
+                self.node_id = node_id
+        
+            def json(self):
+                if not self.body:
+                    r
+====================================================================================================
+idx 9    orchestra Write  bin/redis-server
+  bytes: 305
+  body: #!/usr/bin/env python3
+        """Local Redis-compatible pub/sub daemon (named redis-server so ops tooling can find it)."""
+        import os
+        import sys
+        
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from huddle.miniredis import main  # noqa: E402
+        
+        if __name__ == "__main__":
+            main()
+        
+====================================================================================================
+idx 10   orchestra Write  bin/supervisor.py
+  bytes: 1926
+  body: #!/usr/bin/env python3
+        """Foreground supervisor: runs redis, three HTTP nodes and the IRC gateway; respawns anything that dies."""
+        import os
+        import signal
+        import subprocess
+        import sys
+        import time
+        
+        ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        PY = sys.executable or "python3"
+        
+        SERVICES = {
+            "redis": [os.path.join(ROOT, "bin", "redis-server")],
+            "node0": [PY, "-m", "huddle.node", "--node-id", "0"],
+            "node1": [PY, "-m", "huddle.node", "--node-id", "1"],
+            "node2": [P
+====================================================================================================
+idx 11   orchestra Write  start.sh
+  bytes: 200
+  body: #!/usr/bin/env bash
+        # Launches the Huddle cluster in the foreground (3 HTTP nodes, IRC gateway, local Redis).
+        cd "$(dirname "$0")"
+        chmod +x bin/redis-server 2>/dev/null
+        exec python3 bin/supervisor.py
+        
+====================================================================================================
+idx 12   orchestra Edit   CONTRACTS.md
+  bytes: 541
+  body: `huddle/__init__.py` and the empty `__init__.py` files are already in place.
+        The lead pre-seeded `huddle/config.py` (paths, ports, `node_ports()`, `connect()`) and the
+        `Request`/`Response` classes in `huddle/web/http.py`; the cluster agent owns both from now on and may
+        extend them but must keep the documented names/signatures. `start.sh` → `bin/supervisor.py` runs
+        `bin/redis-server` (a shim that calls `huddle.miniredis.main()`), the three nodes and the IRC gateway,
+        respawning any that die within
+====================================================================================================
+idx 13   orchestra Agent  Build cluster/WS/miniredis
+  prompt: You are the **cluster/WS agent** for "Huddle", a Slack-like chat system being built at /Users/saumya/research/arm_e_final (referred to as `/app` in the spec). Read `/Users/saumya/research/arm_e_final/PROMPT.md` (full product spec) and `/Users/saumya/research/arm_e_final/CONTRACTS.md` (seams between components; authoritative) first. Three other agents are building in parallel: REST API (`huddle/api/**`), IRC gateway (`huddle/irc/**`), browser SPA (`huddle/static/**`). Never edit files you don't own.
+          
+          Stack: Python 3.12 stdlib ONLY (asyncio, sqlite3, socket, hashlib, base64, json, threading, con
+====================================================================================================
+idx 14   a78995a95 Bash   
+  cmd: cat CONTRACTS.md && ls -R huddle bin tests 2>/dev/null | head -80 && cat .start_time && date +%s
+====================================================================================================
+idx 15   orchestra Agent  Build REST API
+  prompt: You are the **REST API agent** for "Huddle", a Slack-like chat system being built at /Users/saumya/research/arm_e_final (called `/app` in the spec). Read `/Users/saumya/research/arm_e_final/PROMPT.md` (full spec — the "API contract" section is graded exactly) and `/Users/saumya/research/arm_e_final/CONTRACTS.md` (component seams; authoritative) first. Other agents are building the cluster/WS layer (`huddle/events.py`, `huddle/node.py`, `huddle/web/**`), the IRC gateway and the SPA in parallel. Never edit files you don't own.
+          
+          Stack: Python 3.12 stdlib ONLY. Nothing may be installed.
+          
+          You own `
+====================================================================================================
+idx 16   a78995a95 Bash   
+  cmd: cat huddle/config.py huddle/web/http.py bin/redis-server bin/supervisor.py; wc -l PROMPT.md
+====================================================================================================
+idx 17   af0ec995b Bash   Check project layout and time
+  cmd: cat .start_time; date +%s; ls -R | head -50; wc -l PROMPT.md CONTRACTS.md
+====================================================================================================
+idx 18   orchestra Agent  Build IRC gateway
+  prompt: You are the **IRC agent** for "Huddle", a Slack-like chat system being built at /Users/saumya/research/arm_e_final (called `/app` in the spec). Read `/Users/saumya/research/arm_e_final/PROMPT.md` (full spec; see "IRC gateway", "WebSocket", "Resilience") and `/Users/saumya/research/arm_e_final/CONTRACTS.md` (authoritative component seams) first. Other agents are concurrently building the REST API (`huddle/api/`), the cluster nodes + WebSocket + miniredis (`huddle/node.py`, `huddle/events.py`, `huddle/miniredis.py`), and the SPA. Never edit files you don't own.
+          
+          Stack: Python 3.12 stdlib ONLY (a
+====================================================================================================
+idx 19   afed52c06 Bash   Check time and project layout
+  cmd: cd /Users/saumya/research/arm_e_final; cat .start_time; date +%s; ls -R huddle tests 2>/dev/null | head -50; wc -l PROMPT.md CONTRACTS.md
+====================================================================================================
+idx 20   orchestra Agent  Build browser SPA
+  prompt: You are the **browser client agent** for "Huddle", a Slack-like chat system being built at /Users/saumya/research/arm_e_final (called `/app` in the spec). Read `/Users/saumya/research/arm_e_final/PROMPT.md` (full spec — especially the UI paragraph near the top, "Frontend hooks", and the REST/WS API contract) and `/Users/saumya/research/arm_e_final/CONTRACTS.md` first. Other agents are concurrently building the REST API, cluster nodes/WebSocket, and IRC gateway. Never edit files you don't own.
+          
+          You own `huddle/static/**` and `tests/ui/**`. Build a hand-written single-page app: `huddle/static/in
+====================================================================================================
+idx 21   a5ab5fecd Bash   
+  cmd: cat .start_time; date +%s; ls -R | head -80; wc -l PROMPT.md CONTRACTS.md
+====================================================================================================
+idx 22   a5ab5fecd Bash   
+  cmd: cd /tmp; python3 -c "import playwright; print(playwright.__file__)" 2>&1; ls ~/Library/Caches/ms-playwright 2>&1 | head; which chromium google-chrome 2>&1; ls /Applications | grep -i -E "chrome|chromium|edge"; node --version; ls /Users/saumya/research/arm_e_final/tests
+====================================================================================================
+idx 23   a5ab5fecd Bash   
+  cmd: python3 -c "import playwright; print(playwright.__file__)" 2>&1; node --version; ls /Users/saumya/research/arm_e_final/tests
+====================================================================================================
+idx 24   a5ab5fecd Bash   
+  cmd: node --version
+====================================================================================================
+idx 25   a5ab5fecd Bash   
+  cmd: ls /Users/saumya/research/arm_e_final/tests /Users/saumya/research/arm_e_final/huddle/web /Users/saumya/research/arm_e_final/huddle/api
+====================================================================================================
+idx 26   a5ab5fecd Bash   
+  cmd: python3 -c "import playwright" 2>&1
+====================================================================================================
+idx 27   a78995a95 Write  huddle/events.py
+  bytes: 6661
+  body: """Durable per-channel event log + cluster fan-out entry points (see CONTRACTS.md).
+        
+        * ``append`` runs inside the caller's ``BEGIN IMMEDIATE`` transaction and allocates a dense seq.
+        * ``publish`` / ``publish_global`` are fire-and-forget: inside a node process they hand the frame
+          to the node's event loop (local delivery + Redis fast path); every node also tails the
+          ``channel_events`` / ``global_events`` tables, so delivery survives a Redis outage and works even
+          when called from a process th
+====================================================================================================
+idx 28   a78995a95 Bash   
+  cmd: D=$(mktemp -d) && HUDDLE_DATA=$D python3 -c "
+from huddle import config, events
+c=config.connect()
+c.execute('BEGIN IMMEDIATE'); print(events.append(c,5,'message.new',{'message':{'id':1}})); c.execute('COMMIT')
+c.execute('BEGIN IMMEDIATE'); print(events.append(c,5,'x',{'seq':99})); c.execute('COMMIT')
+print(events.head_seq(c,5), events.head_seq(c,6), events.online_user_ids())
+events.publish({'a':1
+====================================================================================================
+idx 29   afed52c06 Bash   Check http plumbing and environment
+  cmd: cd /Users/saumya/research/arm_e_final; cat huddle/web/http.py | head -80; ls bin start.sh 2>/dev/null; python3 --version
+====================================================================================================
+idx 30   af0ec995b Bash   Check files and instructions
+  cmd: ls huddle huddle/web tests; cat INSTRUCTIONS.md | head -50; python3 --version
+====================================================================================================
+idx 31   a78995a95 Write  tests/cluster/test_events.py
+  bytes: 4001
+  body: """Unit tests for huddle/events.py (no sockets). Run: python3 -m unittest tests.cluster.test_events"""
+        import os
+        import shutil
+        import sqlite3
+        import tempfile
+        import threading
+        import time
+        import unittest
+        
+        from huddle import config, events
+        
+        
+        class EventsTest(unittest.TestCase):
+            def setUp(self):
+                self.tmp = tempfile.mkdtemp(prefix="huddle-ev-")
+                self._old = (config.DATA_DIR, config.DB_PATH, config.FILES_DIR)
+                config.DATA_DIR = self.tmp
+                config.DB_PATH = os.path.join(
+====================================================================================================
+idx 32   a78995a95 Bash   
+  cmd: python3 -m unittest tests.cluster.test_events 2>&1 | tail -15
+====================================================================================================
+idx 33   a78995a95 Bash   Run events unit tests
+  cmd: python3 -m unittest tests.cluster.test_events
+====================================================================================================
+idx 34   af0ec995b Write  huddle/api/db.py
+  bytes: 8429
+  body: """Domain schema, per-thread connections, transactions and small shared helpers."""
+        import sqlite3
+        import threading
+        import time
+        from datetime import datetime, timezone
+        
+        from huddle import config
+        
+        SCHEMA = """
+        CREATE TABLE IF NOT EXISTS users(
+            id INTEGER PRIMARY KEY,
+            username TEXT UNIQUE COLLATE NOCASE NOT NULL,
+            password_hash TEXT NOT NULL,
+            display_name TEXT NOT NULL DEFAULT '',
+            timezone TEXT NOT NULL DEFAULT 'UTC',
+            avatar_url TEXT NOT NULL DEFAULT '',
+            status_text TEXT
+====================================================================================================
+idx 35   a5ab5fecd Bash   
+  cmd: ls /Users/saumya/research/arm_e_final/tests/ui /Users/saumya/research/arm_e_final/huddle/static; cat /Users/saumya/research/arm_e_final/huddle/config.py | head -50
+====================================================================================================
+idx 36   afed52c06 Write  huddle/irc/client.py
+  bytes: 17969
+  body: """Minimal asyncio HTTP/1.1 + RFC 6455 WebSocket client with node failover.
+        
+        The IRC gateway is a pure client of the HTTP cluster: every REST call goes through
+        ``Cluster.request`` which tries the nodes in ``config.node_ports()`` order (starting with the
+        last node that answered) and fails over when a node refuses, resets or times out.
+        """
+        import asyncio
+        import base64
+        import json
+        import logging
+        import os
+        import struct
+        import urllib.parse
+        
+        from .. import config
+        
+        log = logging.getLogger("huddle.irc.
+====================================================================================================
+idx 37   a78995a95 Write  huddle/miniredis.py
+  bytes: 11605
+  body: """Minimal Redis-compatible (RESP2) pub/sub server, stdlib asyncio only.
+        
+        Supports PING, ECHO, SUBSCRIBE, UNSUBSCRIBE, PSUBSCRIBE, PUNSUBSCRIBE, PUBLISH, QUIT, plus a tiny
+        in-memory GET/SET/DEL/EXISTS/INFO/CLIENT/SELECT/COMMAND/FLUSHALL/DBSIZE so ordinary tooling works.
+        Run: python3 -m huddle.miniredis [--port P]   (default config.REDIS_PORT, binds 127.0.0.1)
+        """
+        import argparse
+        import asyncio
+        import fnmatch
+        import signal
+        import sys
+        
+        from huddle import config
+        
+        
+        class ProtocolError(Exception):
+          
+====================================================================================================
+idx 38   af0ec995b Write  huddle/api/core.py
+  bytes: 9564
+  body: """Serializers and access-control helpers shared by the handlers."""
+        import json
+        import re
+        
+        from huddle.api.db import ApiError
+        
+        ROLES = ("owner", "admin", "member", "guest")
+        ROLE_RANK = {"owner": 3, "admin": 2, "member": 1, "guest": 0}
+        
+        
+        # ---------------------------------------------------------------- input helpers
+        
+        def body_json(req):
+            try:
+                data = req.json()
+            except ValueError:
+                raise ApiError(400, "invalid JSON body")
+            if data is None:
+                data = {}
+            if not isi
+====================================================================================================
+idx 39   af0ec995b Write  huddle/api/router.py
+  bytes: 912
+  body: """Tiny regex router. Handlers: fn(ctx) -> Response | (status, body) | body."""
+        import re
+        import secrets  # noqa: F401  (re-exported convenience)
+        
+        ROUTES = []  # (method, compiled regex, handler, auth_required)
+        
+        
+        def route(method, pattern, auth=True):
+            rx = re.compile("^" + re.sub(r"\{(\w+)\}", r"(?P<\1>[^/]+)", pattern) + "/?$")
+        
+            def deco(fn):
+                ROUTES.append((method, rx, fn, auth))
+                return fn
+            return deco
+        
+        
+        class Ctx:
+            __slots__ = ("req", "conn", "uid", "user", "param
+====================================================================================================
+idx 40   af0ec995b Write  huddle/api/app.py
+  bytes: 3130
+  body: """REST API entry point: ``handle_api(req) -> Response`` (synchronous)."""
+        import logging
+        import sqlite3
+        import time
+        import traceback
+        from urllib.parse import unquote
+        
+        from huddle.web.http import Response
+        from huddle.api.db import ApiError, get_conn, reset_conn
+        from huddle.api.router import ROUTES, Ctx
+        
+        # Register handlers.
+        from huddle.api import h_auth, h_workspaces, h_channels, h_messages, h_misc  # noqa: F401,E402
+        
+        log = logging.getLogger("huddle.api")
+        
+        
+        def _authenticate(ctx):
+            h = ctx.re
+====================================================================================================
+idx 41   a5ab5fecd Write  huddle/static/index.html
+  bytes: 21227
+  body: <!DOCTYPE html>
+        <html lang="en">
+        <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Huddle</title>
+        <link rel="stylesheet" href="/static/app.css">
+        </head>
+        <body class="booting">
+        
+        <!-- ============ Auth ============ -->
+        <div id="auth-modal" class="screen auth-screen" role="dialog" aria-modal="true" aria-labelledby="auth-heading" hidden>
+          <div class="auth-card">
+            <div class="brand"><span class="brand-logo" aria-hidden="true">#</span> Huddle
+====================================================================================================
+idx 42   af0ec995b Write  huddle/api/h_auth.py
+  bytes: 6303
+  body: """Auth + user profile endpoints."""
+        import hashlib
+        import hmac
+        import re
+        import secrets
+        import sqlite3
+        
+        from huddle.api.db import ApiError, Tx, now_iso
+        from huddle.api.router import route
+        from huddle.api.core import body_json, user_obj, get_user, USER_COLS
+        
+        USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{1,32}$")
+        PBKDF2_ITERS = 60000
+        
+        PROFILE_LIMITS = {
+            "display_name": 80,
+            "status_text": 100,
+            "status_emoji": 64,
+            "avatar_url": 2048,
+            "title": 100,
+        }
+        
+        
+        def hash_password(pw):
+            salt 
+====================================================================================================
+idx 43   a78995a95 Write  huddle/web/ws.py
+  bytes: 3814
+  body: """RFC 6455 WebSocket helpers (server side, asyncio) — stdlib only."""
+        import asyncio
+        import base64
+        import hashlib
+        import struct
+        
+        GUID = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+        
+        OP_CONT, OP_TEXT, OP_BINARY, OP_CLOSE, OP_PING, OP_PONG = 0x0, 0x1, 0x2, 0x8, 0x9, 0xA
+        MAX_MESSAGE = 4 * 1024 * 1024
+        
+        
+        class WSClosed(Exception):
+            def __init__(self, code=1000, reason=""):
+                super().__init__(code, reason)
+                self.code = code
+                self.reason = reason
+        
+        
+        def accept_key(key: str) -> str:
+          
+====================================================================================================
+idx 44   af0ec995b Write  huddle/api/ops.py
+  bytes: 1583
+  body: """Shared write operations (must be called inside a Tx)."""
+        from huddle.api.db import now_iso
+        from huddle.api.core import user_obj, get_user
+        
+        
+        def add_channel_member(tx, ch_id, uid, emit=True):
+            """Adds uid to channel; emits member.joined. Returns True if newly added."""
+            conn = tx.conn
+            cur = conn.execute("INSERT OR IGNORE INTO channel_members(channel_id, user_id, joined_at) VALUES (?,?,?)",
+                               (ch_id, uid, now_iso()))
+            if cur.rowcount and emit:
+                tx.emit(c
+====================================================================================================
+idx 45   afed52c06 Write  huddle/irc/gateway.py
+  bytes: 30923
+  body: """IRC gateway: bridges IRC clients to Huddle channels via the cluster's REST + WebSocket API."""
+        import asyncio
+        import logging
+        import time
+        
+        from .. import config
+        from .client import Cluster, EventStream, NodeUnavailable
+        
+        log = logging.getLogger("huddle.irc")
+        
+        SERVER = "huddle"
+        VERSION = "huddle-irc-1.0"
+        MAX_LINE = 8192
+        
+        
+        def parse_line(line):
+            """Parse an IRC line into (command, params). Tags and prefix are discarded."""
+            line = line.strip("\r\n")
+            if line.startswith("@"):
+                _, _
+====================================================================================================
+idx 46   a78995a95 Write  huddle/web/wsclient.py
+  bytes: 6126
+  body: """Tiny blocking WebSocket client (stdlib only) for tests and tools.
+        
+            ws = WSClient("127.0.0.1", 8000, "/api/ws?token=...")
+            ws.send_json({"type": "subscribe", "channel_id": 1})
+            frame = ws.recv_json(timeout=5)     # None on timeout
+            ws.close()
+        """
+        import base64
+        import json
+        import os
+        import socket
+        import struct
+        import time
+        
+        from huddle.web.ws import (OP_BINARY, OP_CLOSE, OP_CONT, OP_PING, OP_PONG, OP_TEXT, accept_key,
+                                   close_payload, encode_frame)
+        
+        
+        class H
+====================================================================================================
+idx 47   afed52c06 Bash   Apply small gateway fixes
+  cmd: python3 - <<'EOF'
+p='huddle/irc/gateway.py'
+s=open(p).read()
+s=s.replace('''        elif text.startswith("\\x01"):
+            return  # other CTCP: ignore
+        elif text.startswith("/"):
+            text = "/" + text  # '//literal' is posted as a literal message
+''','''        elif text.startswith("\\x01"):
+            return  # other CTCP: ignore
+''')
+s=s.replace('''            ch.update(resp
+====================================================================================================
+idx 48   afed52c06 Edit   huddle/irc/gateway.py
+  bytes: 41
+  body:             return  # other CTCP: ignore
+        
+====================================================================================================
+idx 49   a78995a95 Edit   huddle/web/wsclient.py
+  bytes: 234
+  body:             except socket.timeout:
+                        if parts and time.time() < deadline + 5:
+                            deadline += 0.5  # finish a partially received fragmented message
+                            continue
+                        return None
+====================================================================================================
+idx 50   afed52c06 Edit   huddle/irc/gateway.py
+  bytes: 170
+  body:             ch.update(resp.json().get("channel") or {"topic": params[1]})
+                    self.send(f":{self.prefix} TOPIC {irc} :{ch.get('topic') or ''}")
+                    return
+====================================================================================================
+idx 51   a78995a95 Edit   huddle/web/wsclient.py
+  bytes: 176
+  body:                 if parts and time.time() < hard:
+                            deadline = time.time() + 0.5  # finish a partially received fragmented message
+                            continue
+====================================================================================================
+idx 52   afed52c06 Edit   huddle/irc/gateway.py
+  bytes: 385
+  body:             body = msg.get("body") or ""
+                    if body.startswith("/me ") and "\n" not in body:
+                        self.send(f":{nick}!{nick}@huddle PRIVMSG {irc} :\x01ACTION {body[4:]}\x01")
+                        return
+                    for line in body.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+                        if not line:
+                            continue
+                        self.send
+====================================================================================================
+idx 53   a5ab5fecd Write  huddle/static/app.css
+  bytes: 19303
+  body: /* Huddle — hand-written styles. No frameworks. */
+        :root {
+          --aubergine: #3f0e40;
+          --aubergine-dark: #350d36;
+          --aubergine-rail: #2a0a2b;
+          --aubergine-hover: #4e1f50;
+          --sidebar-text: #d9cfdb;
+          --sidebar-muted: #b49fb6;
+          --active: #1164a3;
+          --accent: #007a5a;
+          --accent-hover: #148567;
+          --danger: #c0262d;
+          --text: #1d1c1d;
+          --muted: #616061;
+          --border: #dddddd;
+          --bg: #ffffff;
+          --hover-bg: #f8f8f8;
+          --highlight: #fff8e1;
+          --mention: #1264a3;
+          --radius: 8px;
+          font-size: 15px;
+        }
+        
+====================================================================================================
+idx 54   a78995a95 Edit   huddle/web/wsclient.py
+  bytes: 87
+  body:         deadline = time.time() + timeout
+                hard = deadline + 5
+                parts = []
+====================================================================================================
+idx 55   afed52c06 Write  huddle/irc/__main__.py
+  bytes: 557
+  body: """Entry point: python3 -m huddle.irc [--port P]"""
+        import argparse
+        import asyncio
+        import logging
+        
+        from .. import config
+        from .gateway import main_async
+        
+        
+        def main():
+            ap = argparse.ArgumentParser(description="Huddle IRC gateway")
+            ap.add_argument("--port", type=int, default=config.IRC_PORT)
+            args = ap.parse_args()
+            logging.basicConfig(level=logging.INFO, format="%(asctime)s irc %(levelname)s %(message)s")
+            try:
+                asyncio.run(main_async(args.port))
+            except KeyboardInterru
+====================================================================================================
+idx 56   af0ec995b Write  huddle/api/h_workspaces.py
+  bytes: 21317
+  body: """Workspace, membership/roles, groups and invitations endpoints."""
+        import re
+        import secrets
+        import sqlite3
+        import time
+        
+        from huddle.api.db import ApiError, Tx, now_iso, iso_from_epoch
+        from huddle.api.router import route
+        from huddle.api.core import (body_json, as_int, truthy, user_obj, users_by_ids, workspace_obj, channel_obj,
+                                     get_workspace, ws_role, read_states, ROLES)
+        from huddle.api import ops
+        
+        SLUG_RE = re.compile(r"^[a-z0-9-]{2,32}$")
+        HANDLE_RE = re.compile(r"^
+====================================================================================================
+idx 57   afed52c06 Write  tests/irc/fakecluster.py
+  bytes: 10801
+  body: """A tiny in-process fake of the Huddle HTTP/WS cluster (just enough for the IRC gateway).
+        
+        Several FakeNode servers share one FakeState, so a node can be "killed" (server closed and its
+        WebSockets dropped) while the others keep serving -- mimicking the real cluster.
+        """
+        import asyncio
+        import base64
+        import hashlib
+        import json
+        import struct
+        import urllib.parse
+        
+        WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC11B5B"
+        
+        
+        class FakeState:
+            def __init__(self):
+                self.users = {}
+                self.tokens =
+====================================================================================================
+idx 58   afed52c06 Write  tests/irc/ircutil.py
+  bytes: 2325
+  body: """Test helpers: a scripted IRC client."""
+        import asyncio
+        import re
+        
+        
+        class IRCClient:
+            def __init__(self, reader, writer):
+                self.reader = reader
+                self.writer = writer
+                self.seen = []
+        
+            @classmethod
+            async def connect(cls, port, host="127.0.0.1"):
+                r, w = await asyncio.open_connection(host, port)
+                return cls(r, w)
+        
+            def send(self, line, lf_only=False):
+                self.writer.write(line.encode() + (b"\n" if lf_only else b"\r\n"))
+        
+            async def readline
+====================================================================================================
+idx 59   af0ec995b Write  huddle/api/h_channels.py
+  bytes: 15424
+  body: """Channel, membership, pins, read-state and DM endpoints."""
+        import re
+        import sqlite3
+        
+        from huddle.api.db import ApiError, Tx, now_iso
+        from huddle.api.router import route
+        from huddle.api.core import (body_json, as_int, user_obj, users_by_ids, channel_obj, get_workspace, ws_role,
+                                     get_channel, is_channel_member, require_read, require_not_archived, messages_obj,
+                                     read_states, get_user)
+        from huddle.api import ops
+        
+        CHANNEL_RE = re.compile(r"^[
+====================================================================================================
+idx 60   afed52c06 Write  tests/irc/test_gateway.py
+  bytes: 10609
+  body: """IRC gateway tests against an in-process fake cluster (no real nodes needed).
+        
+        Run: python3 -m unittest tests.irc.test_gateway -v
+        """
+        import asyncio
+        import unittest
+        
+        from huddle.irc.gateway import Gateway, parse_line
+        from tests.irc.fakecluster import FakeNode, FakeState
+        from tests.irc.ircutil import IRCClient
+        
+        FAKE_BASE = 38100
+        IRC_PORT = 36668
+        
+        
+        class ParseTests(unittest.TestCase):
+            def test_parse(self):
+                self.assertEqual(parse_line("PRIVMSG #a-b :hello there"), ("PRIVMSG", ["#a-b",
+====================================================================================================
+idx 61   afed52c06 Bash   Run gateway unit tests
+  cmd: timeout 120 python3 -m unittest tests.irc.test_gateway 2>&1 | tail -40
+====================================================================================================
+idx 62   afed52c06 Bash   Run gateway unit tests
+  cmd: python3 -m unittest tests.irc.test_gateway 2>&1 | tail -40
+====================================================================================================
+idx 63   a78995a95 Write  huddle/node.py
+  bytes: 38488
+  body: """Huddle HTTP node: REST (delegated to huddle.api.app.handle_api), WebSocket fan-out, static SPA.
+        
+        Run: python3 -m huddle.node --node-id N   (listens on 127.0.0.1:BASE_PORT+N)
+        
+        Fan-out design (Redis is only a fast path, sqlite is the source of truth):
+          * API worker threads call events.publish(frame) after commit -> handed to this loop, delivered to
+            local subscribers immediately and PUBLISHed on Redis channel ``huddle:events``.
+          * Every node SUBSCRIBEs to Redis (reconnect loop, backoff <= 
+====================================================================================================
+idx 64   afed52c06 Bash   List huddle package
+  cmd: ls /Users/saumya/research/arm_e_final/huddle
+====================================================================================================
+idx 65   afed52c06 Bash   Run IRC gateway unit tests
+  cmd: cd /Users/saumya/research/arm_e_final; python3 -m unittest tests.irc.test_gateway 2>&1 | tail -40
+====================================================================================================
+idx 66   afed52c06 Bash   Check whether Python can be run
+  cmd: python3 -c "print(1)"
+====================================================================================================
+idx 67   afed52c06 Bash   Inspect node WS protocol handling
+  cmd: cd /Users/saumya/research/arm_e_final; wc -l huddle/node.py huddle/events.py; ls huddle/api; grep -n '"type"\|resume\|subscribe\|head_seq\|unsubscribe\|ping' huddle/node.py | head -60
+====================================================================================================
+idx 68   a78995a95 Edit   huddle/node.py
+  bytes: 172
+  body:                     code = e.code if e.code in (1002, 1009) else 1000
+                            conn.send_raw(wsproto.encode_frame(wsproto.close_payload(code), wsproto.OP_CLOSE))
+====================================================================================================
+idx 69   a78995a95 Bash   Check whether Bash is usable
+  cmd: python3 -c "print(1)"
+====================================================================================================
+idx 70   afed52c06 Edit   huddle/irc/client.py
+  bytes: 494
+  body:         if ftype == "resume.gap":
+                    # Events older than earliest_seq are gone; the server replays what it still has.
+                    earliest = frame.get("earliest_seq")
+                    if cid in self.last_seq and isinstance(earliest, int):
+                        cur = self.last_seq.get(cid) or 0
+                        self.last_seq[cid] = max(min(cur, earliest - 1), 0)
+                    return
+                if ftype == "error":
+                    if cid is not None:
+                        self._resolve(cid)
+                    return
+====================================================================================================
+idx 71   afed52c06 Bash   Check API message/member shapes
+  cmd: cd /Users/saumya/research/arm_e_final; grep -n '"author"\|def message_obj\|def user_obj\|"members"' huddle/api/*.py | head -30
+====================================================================================================
+idx 72   af0ec995b Write  huddle/api/h_messages.py
+  bytes: 20348
+  body: """Messages, threads, reactions, pins, slash commands, mentions and search."""
+        import json
+        import re
+        
+        from huddle.api.db import ApiError, Tx, now_iso
+        from huddle.api.router import route
+        from huddle.api.core import (body_json, as_int, users_by_ids, channel_obj, ws_role, get_channel, is_channel_member,
+                                     require_read, require_write, require_not_archived, get_message, message_obj,
+                                     messages_obj, reactions_for, channel_member_ids)
+        
+        BODY_MAX = 40
+====================================================================================================
+idx 73   afed52c06 Bash   Check workspace detail access rules
+  cmd: cd /Users/saumya/research/arm_e_final; grep -n 'def \|403\|ApiError' huddle/api/h_workspaces.py | head -50
+====================================================================================================
+idx 74   a78995a95 Write  tests/cluster/harness.py
+  bytes: 7096
+  body: """Shared helpers for cluster tests: spawn miniredis + nodes on test ports, HTTP/WS helpers, seeding.
+        
+        Ports: nodes 28000-28002, redis 26379 (never the production ports). Only PIDs started here are killed.
+        """
+        import http.client
+        import json
+        import os
+        import shutil
+        import signal
+        import socket
+        import subprocess
+        import sys
+        import tempfile
+        import time
+        
+        ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        if ROOT not in sys.path:
+            sys.path.insert(0, ROOT)
+        
+        from huddl
+====================================================================================================
+idx 75   af0ec995b Bash   Tighten mention regex
+  cmd: python3 - <<'EOF'
+p='huddle/api/h_messages.py'
+s=open(p).read()
+s=s.replace('''MENTION_RE = re.compile(r"(?<![A-Za-z0-9_.@+-])@([A-Za-z0-9_][A-Za-z0-9_-]*)")''','''MENTION_RE = re.compile(r"(?<![A-Za-z0-9_.@+-])@([A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?)"
+                        r"(?![A-Za-z0-9_@-]|\\.[A-Za-z0-9])")''')
+s=s.replace('''        # strip trailing hyphens/underscores that are probab
+====================================================================================================
+idx 76   af0ec995b Edit   huddle/api/h_messages.py
+  bytes: 155
+  body: MENTION_RE = re.compile(r"(?<![A-Za-z0-9_.@+-])@([A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?)"
+                                r"(?![A-Za-z0-9_@-]|\.[A-Za-z0-9])")
+====================================================================================================
+idx 77   af0ec995b Edit   huddle/api/h_messages.py
+  bytes: 22
+  body:         cands = [tok]
+        
+====================================================================================================
+idx 78   a78995a95 Write  tests/cluster/test_health.py
+  bytes: 2591
+  body: """HTTP plumbing tests against real node processes. Run: python3 -m unittest tests.cluster.test_health"""
+        import http.client
+        import unittest
+        
+        from tests.cluster import harness as H
+        
+        
+        class HealthTest(unittest.TestCase):
+            @classmethod
+            def setUpClass(cls):
+                cls.cluster = H.Cluster(nodes=3).start()
+        
+            @classmethod
+            def tearDownClass(cls):
+                cls.cluster.stop()
+        
+            def test_health_each_node(self):
+                for i in range(3):
+                    st, j = H.http_request(H.BASE_PORT + i,
+====================================================================================================
+idx 79   af0ec995b Edit   huddle/api/h_messages.py
+  bytes: 39
+  body:             add(uid)
+                    break
+        
+====================================================================================================
+idx 80   afed52c06 Edit   tests/irc/ircutil.py
+  bytes: 301
+  body:         """True once the server closed the connection (reads until EOF)."""
+                try:
+                    await asyncio.wait_for(self.reader.read(), timeout)
+                except asyncio.TimeoutError:
+                    return False
+                except (ConnectionError, OSError):
+                    return True
+                return True
+====================================================================================================
+idx 81   af0ec995b Write  huddle/api/h_misc.py
+  bytes: 6877
+  body: """File upload/download endpoints (multipart parsing by hand)."""
+        import os
+        import re
+        import secrets
+        from urllib.parse import quote
+        
+        from huddle import config
+        from huddle.web.http import Response
+        from huddle.api.db import ApiError, now_iso
+        from huddle.api.router import route
+        from huddle.api.core import file_obj, get_channel, can_read_channel
+        
+        
+        def _header_params(value):
+            """Parse 'form-data; name="file"; filename="a.txt"' -> ('form-data', {...})."""
+            parts = []
+            cur, inq, i = "", False,
+====================================================================================================
+idx 82   afed52c06 Bash   Check node CLI and channel routes
+  cmd: cd /Users/saumya/research/arm_e_final; grep -n 'argparse\|add_argument\|def main' huddle/node.py huddle/miniredis.py; grep -n '@route' huddle/api/h_channels.py | head -30
+====================================================================================================
+idx 83   a78995a95 Write  tests/cluster/test_ws.py
+  bytes: 4975
+  body: """WebSocket protocol tests (events appended straight into sqlite, delivered via the cluster).
+        
+        Run: python3 -m unittest tests.cluster.test_ws
+        """
+        import json
+        import time
+        import unittest
+        
+        from tests.cluster import harness as H
+        
+        
+        class WSTest(unittest.TestCase):
+            @classmethod
+            def setUpClass(cls):
+                cls.cluster = H.Cluster(nodes=3)
+                cls.db = cls.cluster.connect()
+                cls.tokens = H.seed_minimal(cls.db)
+                cls.cluster.start()
+        
+            @classmethod
+            def tearDownClass(cls)
+====================================================================================================
+idx 84   af0ec995b Edit   huddle/api/h_misc.py
+  bytes: 38
+  body: headers={"Content-Disposition": disp},
+====================================================================================================
+idx 85   a78995a95 Edit   tests/cluster/harness.py
+  bytes: 1200
+  body: class Api:
+            """REST helpers against the running cluster (requires huddle.api)."""
+        
+            def __init__(self, port_base=BASE_PORT):
+                self.base = port_base
+        
+            def register(self, node, username, password="password123"):
+                st, j = http_request(self.base + node, "POST", "/api/auth/register",
+                                     {"username": username, "password": password, "display_name": username})
+                assert st == 201, (st, j)
+                return j["token"], j["user"]
+        
+            def create_workspace
+====================================================================================================
+idx 86   af0ec995b Write  tests/api/helpers.py
+  bytes: 2750
+  body: """Shared test helpers: isolated data dir + direct handle_api calls (no sockets)."""
+        import json
+        import os
+        import tempfile
+        
+        if "HUDDLE_TEST_DATA" not in os.environ:
+            os.environ["HUDDLE_TEST_DATA"] = tempfile.mkdtemp(prefix="huddle-api-test-")
+        os.environ["HUDDLE_DATA"] = os.environ["HUDDLE_TEST_DATA"]
+        os.environ.setdefault("HUDDLE_BASE_PORT", "18000")
+        
+        from huddle.web.http import Request  # noqa: E402
+        from huddle.api.app import handle_api  # noqa: E402
+        
+        _counter = [0]
+        
+        
+        def uniq(prefix="u"):
+         
+====================================================================================================
+idx 87   a78995a95 Write  tests/cluster/test_redis_outage.py
+  bytes: 3603
+  body: """Redis SIGKILL must not break cross-node fan-out; seq stays dense.
+        
+        Uses the REST API when huddle.api is available (writes on every node), otherwise appends directly.
+        Run: python3 -m unittest tests.cluster.test_redis_outage
+        """
+        import time
+        import unittest
+        
+        from tests.cluster import harness as H
+        
+        
+        class RedisOutageTest(unittest.TestCase):
+            def setUp(self):
+                self.cluster = H.Cluster(nodes=3)
+                self.use_api = H.api_available()
+                if not self.use_api:
+                    self.db = sel
+====================================================================================================
+idx 88   afed52c06 Write  tests/irc/test_bridge.py
+  bytes: 11221
+  body: """End-to-end bridge tests against the real cluster (miniredis + 3 nodes + IRC gateway).
+        
+        Ports: nodes 38000-38002, redis 36379, IRC 36667, private temp data dir. Only PIDs started here
+        are ever killed. Skipped if the cluster modules are not present yet.
+        
+        Run: python3 -m unittest tests.irc.test_bridge -v
+        """
+        import asyncio
+        import json
+        import os
+        import shutil
+        import socket
+        import subprocess
+        import sys
+        import tempfile
+        import time
+        import unittest
+        import urllib.request
+        import uuid
+        
+        from huddle.irc.c
+====================================================================================================
+idx 89   af0ec995b Write  tests/api/test_auth.py
+  bytes: 2833
+  body: import unittest
+        
+        from tests.api.helpers import call, register, uniq
+        
+        
+        class AuthTests(unittest.TestCase):
+            def test_health(self):
+                r = call("GET", "/api/health", node_id=2)
+                self.assertEqual(r.status, 200)
+                self.assertEqual(r.json, {"status": "ok", "node_id": 2})
+        
+            def test_register_login_me(self):
+                name = uniq()
+                r = call("POST", "/api/auth/register", {"username": name, "password": "secret123", "display_name": "Al"})
+                self.assertEqual(r.status, 20
+====================================================================================================
+idx 90   a78995a95 Write  tests/cluster/test_resilience.py
+  bytes: 2619
+  body: """SIGKILL of one node must not affect the others; the node restarts on the same port; its presence expires.
+        
+        Run: python3 -m unittest tests.cluster.test_resilience
+        """
+        import time
+        import unittest
+        
+        from huddle import events
+        from tests.cluster import harness as H
+        
+        
+        class ResilienceTest(unittest.TestCase):
+            def setUp(self):
+                self.cluster = H.Cluster(nodes=3)
+                self.db = self.cluster.connect()
+                self.tokens = H.seed_minimal(self.db)
+                self.cluster.start()
+                self.ad
+====================================================================================================
+idx 91   af0ec995b Bash   Run auth tests
+  cmd: ls tests/api && python3 -m unittest tests.api.test_auth 2>&1 | tail -20
+====================================================================================================
+idx 92   af0ec995b Bash   Run auth tests
+  cmd: python3 -m unittest tests.api.test_auth 2>&1 | tail -20
+====================================================================================================
+idx 93   af0ec995b Bash   List test directory
+  cmd: ls /Users/saumya/research/arm_e_final/tests/api
+====================================================================================================
+idx 94   af0ec995b Bash   Run auth unit tests
+  cmd: python3 -m unittest discover -s /Users/saumya/research/arm_e_final/tests/api -t /Users/saumya/research/arm_e_final -p "test_auth.py"
+====================================================================================================
+idx 95   a78995a95 Write  tests/cluster/test_performance.py
+  bytes: 4334
+  body: """Delivery latency under concurrent writes on all three nodes (target: median <=300 ms, p95 <=800 ms,
+        <1% missing). Uses REST when huddle.api is available, else direct sqlite appends.
+        
+        Run: python3 -m unittest tests.cluster.test_performance
+        """
+        import statistics
+        import threading
+        import time
+        import unittest
+        
+        from tests.cluster import harness as H
+        
+        WRITERS_PER_NODE = 3
+        MSGS_PER_WRITER = 20
+        SUBS_PER_NODE = 3
+        
+        
+        class PerformanceTest(unittest.TestCase):
+            def setUp(self):
+                self.cluster = H.
+====================================================================================================
+idx 96   a78995a95 Bash   Run events unit tests
+  cmd: python3 -m unittest tests.cluster.test_events
+====================================================================================================
+idx 97   afed52c06 Write  tests/irc/test_bridge.py
+  bytes: 11477
+  body: """End-to-end bridge tests against the real cluster (miniredis + 3 nodes + IRC gateway).
+        
+        Ports: nodes 38000-38002, redis 36379, IRC 36667, private temp data dir. Only PIDs started here
+        are ever killed.
+        
+        Run: python3 -m unittest tests.irc.test_bridge -v
+        """
+        import asyncio
+        import json
+        import os
+        import shutil
+        import socket
+        import subprocess
+        import sys
+        import tempfile
+        import time
+        import unittest
+        import urllib.request
+        import uuid
+        
+        from huddle.irc.client import Cluster, WebSocket
+        from tests.irc.ircut
+====================================================================================================
+idx 98   afed52c06 Bash   Run IRC gateway unit tests against fake cluster
+  cmd: python3 -m unittest tests.irc.test_gateway
+====================================================================================================
+idx 99   a78995a95 Edit   huddle/node.py
+  bytes: 89
+  body:     def run(self):
+                self.conn = self._open()
+                while not self.stop.is_set():
+====================================================================================================
+idx 100  a78995a95 Edit   huddle/node.py
+  bytes: 1500
+  body:                     self.hub.loop.call_soon_threadsafe(self.hub.on_tail, frames, gl)
+                    except Exception as e:  # noqa: BLE001
+                        log("tail error:", e)
+                        time.sleep(0.2)
+                    if not busy:
+                        self.stop.wait(TAIL_INTERVAL)
+        
+        
+        class PresenceWriter(threading.Thread):
+            """Mirrors this node's open-WS user counts into ws_presence (heartbeat every PRESENCE_INTERVAL,
+            immediately on change). Separate thread so a busy write lock never delays the
+====================================================================================================
+idx 101  af0ec995b Edit   huddle/api/h_channels.py
+  bytes: 54
+  body:     is_private = truthy(data.get("is_private", False))
+====================================================================================================
+idx 102  af0ec995b Edit   huddle/api/h_channels.py
+  bytes: 65
+  body: from huddle.api.core import (body_json, as_int, truthy, user_obj,
+====================================================================================================
+idx 103  orchestra Bash   Run IRC gateway unit tests against fake cluster
+  cmd: timeout 300 python3 -m unittest tests.irc.test_gateway 2>&1 | tail -30
+====================================================================================================
+idx 104  a78995a95 Edit   huddle/node.py
+  bytes: 191
+  body:         c = self.conn
+                try:
+                    c.execute("BEGIN IMMEDIATE")
+                    now = time.time()
+                    c.execute("DELETE FROM ws_presence WHERE node_id=?", (self.hub.node_id,))
+====================================================================================================
+idx 105  orchestra Bash   Run IRC gateway unit tests against fake cluster
+  cmd: python3 -m unittest tests.irc.test_gateway
+====================================================================================================
+idx 106  a78995a95 Edit   huddle/node.py
+  bytes: 146
+  body:             except Exception:  # noqa: BLE001
+                        pass
+                    self.hub.presence_dirty.set()
+                    time.sleep(0.2)
+        
+        
+        # -----
+====================================================================================================
+idx 107  af0ec995b Bash   Check Python can run
+  cmd: python3 -c "import sys; print(sys.version)"
+====================================================================================================
+idx 108  a78995a95 Edit   huddle/node.py
+  bytes: 104
+  body:         tail = Tailer(self.hub)
+                tail.start()
+                PresenceWriter(self.hub, tail.stop).start()
+====================================================================================================
+idx 109  af0ec995b Write  tests/api/test_profiles.py
+  bytes: 1479
+  body: import unittest
+        
+        from tests.api.helpers import call, register
+        
+        
+        class ProfileTests(unittest.TestCase):
+            def test_get_user(self):
+                u, tok = register()
+                r = call("GET", f"/api/users/{u['id']}", token=tok)
+                self.assertEqual(r.status, 200)
+                self.assertEqual(r.json["user"]["id"], u["id"])
+                self.assertEqual(call("GET", "/api/users/99999999", token=tok).status, 404)
+        
+            def test_patch_me(self):
+                u, tok = register()
+                r = call("PATCH", "/api/users/me",
+====================================================================================================
+idx 110  a78995a95 Edit   huddle/node.py
+  bytes: 97
+  body:                 path = parsed.path or "/"  # raw (still percent-encoded); the API unquotes params
+====================================================================================================
+idx 111  af0ec995b Write  tests/api/test_workspaces.py
+  bytes: 6346
+  body: import unittest
+        
+        from tests.api.helpers import call, register, make_ws, make_channel, uniq
+        
+        
+        class WorkspaceTests(unittest.TestCase):
+            def test_create_and_list(self):
+                u, tok = register()
+                slug = uniq("acme-").replace("x", "-")
+                r = call("POST", "/api/workspaces", {"slug": slug, "name": "Acme"}, tok)
+                self.assertEqual(r.status, 201, r)
+                ws = r.json["workspace"]
+                self.assertEqual(ws["join_mode"], "open")
+                self.assertEqual(ws["owner_id"], u["id"]
+====================================================================================================
+idx 112  a78995a95 Edit   huddle/node.py
+  bytes: 150
+  body: def err_body(code, message):
+            # Same shape as huddle.api (``{"error": "<message>"}``); ``code`` kept for readability.
+            return {"error": message}
+====================================================================================================
+idx 113  a5ab5fecd Write  huddle/static/app.js
+  bytes: 95292
+  body: /* Huddle SPA — hand-written, no frameworks, no build step. */
+        (function () {
+          'use strict';
+        
+          // ------------------------------------------------------------------
+          // Utilities
+          // ------------------------------------------------------------------
+          const $ = (sel, root) => (root || document).querySelector(sel);
+          const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+          const byId = (id) => document.getElementById(id);
+        
+          function el(tag, attrs, ...children) {
+            
+====================================================================================================
+idx 114  a5ab5fecd Bash   
+  cmd: node --check /Users/saumya/research/arm_e_final/huddle/static/app.js && echo OK
+====================================================================================================
+idx 115  a5ab5fecd Bash   
+  cmd: node --check /Users/saumya/research/arm_e_final/huddle/static/app.js
+====================================================================================================
+idx 116  af0ec995b Write  tests/api/test_channels.py
+  bytes: 7355
+  body: import unittest
+        
+        from tests.api.helpers import call, register, make_ws, make_channel, post, channel_events
+        
+        
+        class ChannelTests(unittest.TestCase):
+            def setUp(self):
+                self.owner, self.otok = register()
+                self.ws, self.gen = make_ws(self.otok)
+                self.slug = self.ws["slug"]
+        
+            def test_create_channel(self):
+                r = call("POST", f"/api/workspaces/{self.slug}/channels",
+                         {"name": "random", "description": "ignored"}, self.otok)
+                self.assertEqual(r.st
+====================================================================================================
+idx 117  a78995a95 Edit   huddle/node.py
+  bytes: 1142
+  body:     def _publish_local(self, frame):
+                try:
+                    data = json.dumps({"c": CLUSTER_TAG, "f": frame}, separators=(",", ":")).encode()
+                except Exception:  # noqa: BLE001
+                    return
+                self.on_frame(frame, None)
+                self.redis.publish(REDIS_EVENTS, data)
+        
+            def _publish_global_local(self, gid, frame):
+                self.on_global(gid, frame)
+                try:
+                    self.redis.publish(REDIS_GLOBAL, json.dumps({"c": CLUSTER_TAG, "gid": gid, "f": frame}).encode())
+             
+====================================================================================================
+idx 118  a78995a95 Edit   huddle/node.py
+  bytes: 223
+  body: REDIS_GLOBAL = b"huddle:global"
+        # Identifies this cluster's db so frames from another cluster sharing a Redis are ignored.
+        CLUSTER_TAG = __import__("hashlib").sha1(os.path.realpath(config.DB_PATH).encode()).hexdigest()[:12]
+====================================================================================================
+idx 119  a78995a95 Bash   Byte-compile cluster modules to check syntax
+  cmd: python3 -m py_compile huddle/node.py huddle/events.py huddle/miniredis.py huddle/web/ws.py huddle/web/wsclient.py tests/cluster/harness.py
+====================================================================================================
+idx 120  af0ec995b Write  tests/api/test_messages.py
+  bytes: 7588
+  body: import json
+        import re
+        import unittest
+        
+        from tests.api.helpers import call, register, make_ws, make_channel, post, channel_events
+        
+        TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
+        
+        
+        class MessageTests(unittest.TestCase):
+            def setUp(self):
+                self.owner, self.otok = register()
+                self.ws, self.gen = make_ws(self.otok)
+                self.slug = self.ws["slug"]
+                self.ch = make_channel(self.otok, self.slug)
+                self.user, self.utok = register()
+                call("POST
+====================================================================================================
+idx 121  a5ab5fecd Edit   huddle/static/app.css
+  bytes: 273
+  body:   border-radius: 8px; padding: 2px; box-shadow: 0 1px 4px rgba(0,0,0,.08); opacity: 0; transition: opacity .08s;
+          z-index: 5;
+        }
+        .message:hover .msg-actions, .message:focus-within .msg-actions, .msg-actions.force { opacity: 1; }
+        .msg-text .message-body { display: inline; }
+====================================================================================================
+idx 122  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 76
+  body: filter((m) => !m.parent_id && !m.deleted && !m.is_deleted && !m.deleted_at);
+====================================================================================================
+idx 123  af0ec995b Write  tests/api/test_dms.py
+  bytes: 1659
+  body: import unittest
+        
+        from tests.api.helpers import call, register, post
+        
+        
+        class DMTests(unittest.TestCase):
+            def test_dm_roundtrip(self):
+                a, atok = register()
+                b, btok = register()
+                c, ctok = register()
+                r1 = call("POST", "/api/dms", {"user_id": b["id"]}, atok)
+                self.assertEqual(r1.status, 200, r1)
+                cid = r1.json["channel_id"]
+                self.assertIsInstance(cid, int)
+                r2 = call("POST", "/api/dms", {"user_id": a["id"]}, btok)
+                self.assertEqua
+====================================================================================================
+idx 124  af0ec995b Write  tests/api/test_files.py
+  bytes: 3213
+  body: import unittest
+        
+        from huddle import config
+        from tests.api.helpers import call, register, make_ws, post
+        
+        BOUNDARY = "----huddleTestBoundary7MA4YWxk"
+        
+        
+        def multipart(filename, data, ctype="text/plain", field="file"):
+            body = (f"--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"note\"\r\n\r\nhello\r\n"
+                    f"--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"{field}\"; filename=\"{filename}\"\r\n"
+                    f"Content-Type: {ctype}\r\n\r\n").encode() + data + f"\r\n--{BOUNDARY}
+====================================================================================================
+idx 125  a5ab5fecd Write  tests/ui/test_hooks.py
+  bytes: 7440
+  body: """Static checks for the SPA: every pinned frontend hook exists in the served HTML.
+        
+        Stdlib only (unittest + html.parser); runnable with `python3 -m unittest tests.ui.test_hooks`
+        or pytest.
+        """
+        import os
+        import re
+        import unittest
+        from html.parser import HTMLParser
+        
+        ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        STATIC = os.path.join(ROOT, "huddle", "static")
+        
+        PINNED_TESTIDS = """
+        auth-form auth-submit auth-toggle workspace-create-form empty-state-create-works
+====================================================================================================
+idx 126  af0ec995b Write  tests/api/test_search_commands.py
+  bytes: 4479
+  body: import unittest
+        
+        from tests.api.helpers import call, register, make_ws, make_channel, post, channel_events
+        
+        SHRUG = "¯\\_(ツ)_/¯"
+        
+        
+        class SearchCommandTests(unittest.TestCase):
+            def setUp(self):
+                self.owner, self.otok = register()
+                self.ws, self.gen = make_ws(self.otok)
+                self.slug = self.ws["slug"]
+                self.ch = make_channel(self.otok, self.slug)
+        
+            def test_search(self):
+                priv = make_channel(self.otok, self.slug, is_private=True)
+                post(self.otok, self.
+====================================================================================================
+idx 127  a5ab5fecd Bash   
+  cmd: python3 -m unittest tests.ui.test_hooks -v 2>&1 | tail -20
+====================================================================================================
+idx 128  a5ab5fecd Bash   
+  cmd: python3 /Users/saumya/research/arm_e_final/tests/ui/test_hooks.py
+====================================================================================================
+idx 129  a5ab5fecd Bash   
+  cmd: cd /Users/saumya/research/arm_e_final/huddle/static && for t in auth-form auth-submit auth-toggle workspace-create-form empty-state-create-workspace join-workspace-form join-workspace-submit channel-list dms-list new-channel-btn current-user logout-btn workspace-header workspace-settings-btn workspace-settings-close workspace-name-input workspace-join-mode workspace-general-submit channel-title ch
+====================================================================================================
+idx 130  af0ec995b Write  tests/api/test_groups_invitations.py
+  bytes: 5375
+  body: import unittest
+        
+        from tests.api.helpers import call, register, make_ws
+        
+        
+        class GroupTests(unittest.TestCase):
+            def test_groups_crud(self):
+                owner, otok = register()
+                ws, gen = make_ws(otok)
+                slug = ws["slug"]
+                a, atok = register()
+                b, btok = register()
+                for t in (atok, btok):
+                    call("POST", f"/api/channels/{gen['id']}/join", token=t)
+                r = call("POST", f"/api/workspaces/{slug}/groups", {"handle": "devs", "name": "Devs", "user_ids": [a[
+====================================================================================================
+idx 131  a5ab5fecd Bash   
+  cmd: grep -o 'data-testid="[^"]*"' /Users/saumya/research/arm_e_final/huddle/static/index.html | sort | uniq -c
+====================================================================================================
+idx 132  af0ec995b Edit   tests/api/test_files.py
+  bytes: 132
+  body: from tests.api.helpers import call, register, make_ws, post
+        from huddle import config  # noqa: E402  (after helpers set HUDDLE_DATA)
+====================================================================================================
+idx 133  a5ab5fecd Bash   
+  cmd: grep -o "'data-testid': '[a-z-]*'" /Users/saumya/research/arm_e_final/huddle/static/app.js | sort | uniq -c
+====================================================================================================
+idx 134  a5ab5fecd Bash   
+  cmd: ls /Users/saumya/research/arm_e_final/huddle /Users/saumya/research/arm_e_final/huddle/api /Users/saumya/research/arm_e_final/huddle/web
+====================================================================================================
+idx 135  a5ab5fecd Bash   
+  cmd: cd /Users/saumya/research/arm_e_final/huddle && wc -l api/*.py web/ws.py node.py && grep -n "def \|return Response\|return ok\|return created" api/h_workspaces.py | head -120
+====================================================================================================
+idx 136  a5ab5fecd Bash   
+  cmd: cd /Users/saumya/research/arm_e_final/huddle/api && grep -n "@route" *.py
+====================================================================================================
+idx 137  a5ab5fecd Bash   
+  cmd: cd /Users/saumya/research/arm_e_final/huddle/api && grep -n "def require_write" -A 22 core.py; grep -n "def message_obj\|def messages_obj\|def user_obj\|def channel_obj\|def workspace_obj" -A 14 core.py | head -120
+====================================================================================================
+idx 138  a5ab5fecd Bash   
+  cmd: cd /Users/saumya/research/arm_e_final/huddle && grep -n "error" api/app.py api/db.py | head -20; grep -n "def accept_invitation" -A 20 api/h_workspaces.py
+====================================================================================================
+idx 139  af0ec995b Bash   Run all API unit tests
+  cmd: python3 -m unittest discover -s tests/api -t . 2>&1 | tail -30
+====================================================================================================
+idx 140  a5ab5fecd Bash   
+  cmd: cd /Users/saumya/research/arm_e_final/huddle && grep -n "resume\|subscribe\|\"type\"\|'type'\|ping\|static\|index.html" node.py | head -60
+====================================================================================================
+idx 141  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 540
+  body:     const dms = await fetchDms();
+            if (token !== S.loadSeq) return;
+            S.ws = data.workspace;
+            S.myRole = data.role || (data.workspace && data.workspace.role) || null;
+            const idx = S.workspaces.findIndex((w) => w.slug === S.ws.slug);
+            if (idx >= 0) S.workspaces[idx] = Object.assign({}, S.workspaces[idx], S.ws); else S.workspaces.push(S.ws);
+            lsSet(lastWsKey(), S.ws.slug);
+            S.channels = new Map();
+            for (const c of data.channels || []) S.channels.set(c.id, c);
+            mergeDms(dm
+====================================================================================================
+idx 142  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 348
+  body:       const data = await api('GET', `/api/workspaces/${encodeURIComponent(S.ws.slug)}?include_archived=1`);
+              for (const c of data.channels || []) S.channels.set(c.id, Object.assign({}, S.channels.get(c.id) || {}, c));
+              if (data.workspace) S.ws = data.workspace;
+              if (data.role) S.myRole = data.role;
+              mergeDms(await fetchDms());
+====================================================================================================
+idx 143  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 832
+  body:   // DMs are not workspace-scoped in the API's workspace detail; fetch them separately.
+          async function fetchDms() {
+            try {
+              const d = await api('GET', '/api/dms');
+              return d.dms || d.channels || [];
+            } catch (_) { return []; }
+          }
+          function mergeDms(dms) {
+            for (const c of dms || []) {
+              if (S.ws && c.workspace_id !== null && c.workspace_id !== undefined && c.workspace_id !== S.ws.id) continue;
+              c.is_dm = true;
+              if (c.other_user) { S.dmNames.set(c.id, c.other_
+====================================================================================================
+idx 144  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 178
+  body:       const mine = S.wsMembers.find((m) => m.user_id === (S.me && S.me.id));
+              S.myRole = mine ? mine.role : (S.ws && S.me && S.ws.owner_id === S.me.id ? 'owner' : S.myRole);
+====================================================================================================
+idx 145  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 446
+  body:       const body = { user_id: userId };
+              if (S.ws) body.workspace_id = S.ws.id;
+              const d = await api('POST', '/api/dms', body);
+              const cid = d.channel_id !== undefined ? d.channel_id : (d.channel && d.channel.id);
+              closeAllModals();
+              if (user) S.dmNames.set(cid, user);
+              if (d.channel) mergeDms([Object.assign({}, d.channel, { workspace_id: null })]);
+              await refreshChannels();
+              if (!S.channels.has(cid)) {
+====================================================================================================
+idx 146  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 269
+  body:       let d;
+              try {
+                d = await api('POST', `/api/channels/${cid}/members`, { username });
+              } catch (e1) {
+                if (e1.status !== 405) throw e1;
+                d = await api('POST', `/api/channels/${cid}/messages`, { body: `/invite @${username}` });
+              }
+====================================================================================================
+idx 147  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 517
+  body:     try {
+              await api('POST', `/api/workspaces/${encodeURIComponent(slug)}/join`);
+              return slug;
+            } catch (e) {
+              if (e.status !== 404 && e.status !== 405) throw e;
+            }
+            const d = await api('GET', `/api/workspaces/${encodeURIComponent(slug)}`);
+            const chans = d.channels || [];
+            const general = chans.find((c) => c.name === 'general') || chans.find((c) => !c.is_private && !c.is_dm);
+            if (!general) return null;
+            await api('POST', `/api/channels/${general.id}/join`);
+====================================================================================================
+idx 148  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 428
+  body:         if (id === undefined) return;
+                if (findMessage(id)) removeMessageEverywhere(id);
+                if (f.parent_id && typeof f.reply_count === 'number') {
+                  const p = findInLists(f.parent_id);
+                  if (p) p.reply_count = f.reply_count;
+                  if (S.thread && S.thread.parent && S.thread.parent.id === f.parent_id) S.thread.parent.reply_count = f.reply_count;
+                }
+                rerenderAll();
+                return;
+====================================================================================================
+idx 149  a5ab5fecd Bash   
+  cmd: cd /Users/saumya/research/arm_e_final/huddle/api && sed -n 1,60p h_auth.py | grep -n "USERNAME\|re.compile\|len(pw\|password" ; grep -n "def require_read" -A 15 core.py
+====================================================================================================
+idx 150  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 252
+  body:     byId('channel-list').appendChild(el('li', { class: 'sidebar-empty', text: 'Create or join a workspace to see channels.' }));
+            S.channels = new Map();
+            S.currentChannelId = null;
+            closeThread();
+            renderHeader();
+            renderMessages();
+          }
+====================================================================================================
+idx 151  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 223
+  body:     let added = false;
+            for (const c of dms || []) {
+              // DMs are user-to-user (not workspace scoped) in this API, so show them in every workspace.
+              c.is_dm = true;
+              if (!S.channels.has(c.id)) added = true;
+====================================================================================================
+idx 152  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 782
+  body:       S.channels.set(c.id, Object.assign({}, S.channels.get(c.id) || {}, c));
+            }
+            return added;
+          }
+        
+          // Poll for DMs that someone else opened with us (no WS event announces a brand-new DM channel).
+          async function pollDms() {
+            if (!S.token || !S.ws) return;
+            const dms = await fetchDms();
+            if (!S.ws) return;
+            const before = new Map(Array.from(S.channels.values()).filter((c) => c.is_dm).map((c) => [c.id, S.unread.get(c.id) || 0]));
+            const added = mergeDms(dms);
+            // keep 
+====================================================================================================
+idx 153  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 160
+  body:     renderCurrentUser();
+            connectSocket();
+            clearInterval(S.dmPollTimer);
+            S.dmPollTimer = setInterval(pollDms, 15000);
+            await loadWorkspaces();
+          }
+====================================================================================================
+idx 154  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 82
+  body:     clearInterval(S.pingTimer);
+            clearInterval(S.dmPollTimer);
+            S.me = null;
+====================================================================================================
+idx 155  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 237
+  body:     const near = isNearBottom(scroller);
+            const focusedEdit = document.activeElement && document.activeElement.closest && document.activeElement.closest('#thread-replies .edit-form');
+            const ch = S.channels.get(S.thread.channelId);
+====================================================================================================
+idx 156  a5ab5fecd Edit   huddle/static/app.js
+  bytes: 192
+  body:     for (const r of S.thread.replies) list.appendChild(buildMessage(r, true));
+            if (focusedEdit) focusEditBox(list);
+            if (forceBottom || near) scroller.scrollTop = scroller.scrollHeight;
+====================================================================================================
+idx 157  a5ab5fecd Bash   
+  cmd: curl -s -m 3 http://127.0.0.1:8000/api/health; echo; curl -s -m 3 http://127.0.0.1:8000/ | head -5
+====================================================================================================
+idx 158  a5ab5fecd Bash   
+  cmd: grep -o ' id="[^"]*"' /Users/saumya/research/arm_e_final/huddle/static/index.html | sort | uniq -d
+====================================================================================================
+idx 159  a5ab5fecd Bash   
+  cmd: grep -n -E "\b(prompt|confirm|alert)\s*\(" /Users/saumya/research/arm_e_final/huddle/static/app.js; grep -c "byId('" /Users/saumya/research/arm_e_final/huddle/static/app.js; grep -o "byId('[a-z-]*')" /Users/saumya/research/arm_e_final/huddle/static/app.js | sort -u | sed "s/byId('\(.*\)')/\1/" > /dev/null; echo done
+====================================================================================================
+idx 160  a5ab5fecd Bash   
+  cmd: grep -o "byId('[a-z-]*')" /Users/saumya/research/arm_e_final/huddle/static/app.js | sort -u
+====================================================================================================
+total decisions: 161
