@@ -5,7 +5,7 @@ A tool for keeping a human in the loop while Claude Code runs subagents.
 It reads your task brief and your own decomposition instructions, works out what must be true for
 the task to succeed and how you said the work should be divided, and then watches the run. It
 speaks when an agent is about to depart from how you said the work should be done **in a way that
-will cost a measurable success metric** — and stays quiet otherwise, which is almost always.
+will cost a measurable success metric**, and stays quiet otherwise, which is almost always.
 
 > Research prototype, used in a study on human oversight of coding agents. Tested on macOS with
 > Claude Code, on SWE-Marathon and ProgramBench tasks.
@@ -67,9 +67,9 @@ So one channel carries both the task-quality and the safety story, because they 
 **1 · Before the run, it reads your brief.** No questions are asked. The extractor turns
 `PROMPT.md` plus your decomposition instructions into:
 
-- **requirements** — what must work, each carrying the brief's own sentences copied **verbatim and
+- **requirements**, what must work, each carrying the brief's own sentences copied **verbatim and
   verified against the source text**, plus the file that proves it
-- **preferences** — how you want it built, in four categories: ownership, shared interfaces,
+- **preferences**, how you want it built, in four categories: ownership, shared interfaces,
   verification, prioritization. Each one records which metrics it protects and which requirements
   it serves
 
@@ -80,8 +80,8 @@ proposed for confirmation rather than quoted at you as yours.
 The output is `task_model.json`, a file you can read and edit.
 
 **2 · During the run, a filter runs on every tool call.** Six deterministic lookups against three
-lists — the graded file set, a port and process registry, and a dependency map rebuilt from events
-*before* the current decision — plus a cheap keyword path that exists only to get borderline
+lists, the graded file set, a port and process registry, and a dependency map rebuilt from events
+*before* the current decision, plus a cheap keyword path that exists only to get borderline
 decisions in front of the judge. **Keyword matching cannot interrupt you**; it has no vote.
 
 **3 · What survives goes to one judge call.** It returns a verdict, what it cites, the metric
@@ -106,7 +106,7 @@ nothing. Everything else is recorded and shown to nobody.
 
 Two separate exercises, in [`eval/`](eval/).
 
-**Comparison 1 — is it flagging the right things?** Replay a recording from a run with *no tool
+**Comparison 1, is it flagging the right things?** Replay a recording from a run with *no tool
 active*, decision by decision, against an answer key written before the tool was replayed.
 
 ```
@@ -122,7 +122,7 @@ risk every time it spoke. It delivered one of the two. **Its understanding is ah
 delivery.** On the three moments in that run where speaking would have made things *worse*, it said
 nothing.
 
-**Comparison 2 — does the project come out better?** Build the same task twice and let the real
+**Comparison 2, does the project come out better?** Build the same task twice and let the real
 SWE-Marathon suite decide.
 
 ```

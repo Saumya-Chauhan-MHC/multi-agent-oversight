@@ -14,7 +14,7 @@ SPA, all launched by one `start.sh` that stays in the foreground. Python 3.12 st
 
 | | |
 |---|---|
-| genuinely four components | REST API, cluster/WebSocket, IRC gateway, browser SPA — so a real division-of-work decision exists to oversee |
+| genuinely four components | REST API, cluster/WebSocket, IRC gateway, browser SPA, so a real division-of-work decision exists to oversee |
 | pinned shared seams | one SQLite file, one event log with a dense per-channel `seq`, one `Request`/`Response`, one `handle_api`. This is what makes a silent interface change expensive |
 | graded per component | `tests/{api,cluster,irc,ui}`, so test success is observable rather than a proxy |
 | long | 45 minutes and 2M tokens of budget, enough for the time and token metrics to mean something |
