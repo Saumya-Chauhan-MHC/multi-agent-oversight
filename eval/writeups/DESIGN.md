@@ -21,7 +21,7 @@
 
 ### Why provenance is checked, not trusted
 
-- The rule the collusion finding kept citing — *"each component agent owns and must pass its own test directory before considering its piece done"* — is **not in the developer's file**. Five extraction draws with quote verification produced it zero times
+- The rule the collusion finding kept citing, *"each component agent owns and must pass its own test directory before considering its piece done"*, is **not in the developer's file**. Five extraction draws with quote verification produced it zero times
 - The ownership table says an agent **owns** `tests/api/**`. Nothing anywhere says it must **pass** them
 - The extractor had been inventing it and labelling it `source: decomposition` → the tool was quoting the developer a sentence they never wrote → the `source` field, which exists precisely to separate quoted from inferred, was the thing that lied
 - Word-presence checking does not catch this: across 27KB of brief, every individual word of an invented rule occurs somewhere. So the extractor must **return the sentence**, and it is matched against the source
@@ -36,7 +36,7 @@
 ### The truncation that capped recall
 
 - `extract()` was called with `prd[:8000]`. `PROMPT.md` is 20,683 characters → the extractor read **39% of the brief**
-- Nine of fifteen graded areas were cut off before it saw them, including Read state and Slash — and `test_read_state` and `test_slash` are among the real failures
+- Nine of fifteen graded areas were cut off before it saw them, including Read state and Slash, and `test_read_state` and `test_slash` are among the real failures
 - With *"be brief, 3 to 8 requirements"* on top → **7 requirements for 18 graded areas**, and eight official suites with no requirement record at all
 - **4 of the 6 real failures sat in areas no requirement covered** → no requirement, no declared check, no coverage question askable, no trigger that could fire. Achievable recall was capped by a constant
 - Fixed → 60,000 characters, and one requirement per graded area. Same brief now yields **17 requirements, every one with a verified spec quote**, and all six failure areas represented
@@ -55,21 +55,21 @@
 
 ## 4 · The three lists
 
-### 4a · Grader's files — static, from extraction
+### 4a · Grader's files, static, from extraction
 
 - Built once: the union of every requirement's `check` and `check_files`
 - Plus **graded directories**: the directories those checks live in, and any test directory a preference names
-- Why directories → `check_files` resolves at extraction against the test files that exist *then*. On a greenfield task that is none of them, so the set fell back to the literal paths the extractor guessed: `tests/api/test_auth.py`, `tests/cluster/test_nodes.py`. The agent then wrote `tests/api/test_roles.py` and `test_workspaces.py` — none of which match → the collusion lookup was blind to **every test file the agent actually produced**
+- Why directories → `check_files` resolves at extraction against the test files that exist *then*. On a greenfield task that is none of them, so the set fell back to the literal paths the extractor guessed: `tests/api/test_auth.py`, `tests/cluster/test_nodes.py`. The agent then wrote `tests/api/test_roles.py` and `test_workspaces.py`, none of which match → the collusion lookup was blind to **every test file the agent actually produced**
 - The verifier runs directories, so a directory is the honest unit → `is_graded()` and `declaring_requirements()` both match by file **or** containing directory. They used to disagree, so a file in a graded directory was graded and yet had no declaring requirement
 - Membership test on every write
 
-### 4b · Port and process registry — live, from the event log
+### 4b · Port and process registry, live, from the event log
 
 - `{resource → owner}`, appended whenever a command binds a port or spawns a named process; owner is the `agent_id` on that event
 - Read by `resources_touched(cmd)`: ports parsed out of `:8001`, `--port 8001`, and process names out of `kill`/`pkill`/`fuser`/`lsof`
 - **Empty at T+0** → see the orchestration gap, §7
 
-### 4c · Dependency map — live, from the event log
+### 4c · Dependency map, live, from the event log
 
 - Per agent: files written (owns), files read but not owned (depends on), and the timestamp of its last test command that exited 0
 - Plus **import edges**: every `from x import y` / `require(...)` inside written code
@@ -87,7 +87,7 @@
 - **Collusion** → agent games the thing that grades it · *VisibleBench* arXiv 2510.20270
   - → detect: write target in the grader's file set, a diff that weakens an assertion, a check written so it cannot execute
   - → grounded in the **requirement** whose declared check it is, not in a verification preference, because on these tasks the developer wrote none
-  - → metric: test success *at the root* — not a lower number, an untrustworthy one
+  - → metric: test success *at the root*, not a lower number, an untrustworthy one
   - Observed, twice, and neither was a disabled assertion:
     - an agent's suite passing **24/24** while the official grader fails **6 of 129** on behaviours that suite does not exercise
     - the brief's clause *"Promoting/demoting between admin and member/guest is owner-or-admin; admins cannot modify another admin (→ 403)"* is **ambiguous** for an admin promoting a member. The agent resolved it, asserted its own reading as a passing test, and nothing downstream could then reveal the disagreement → the useful sentence is not *your test is wrong* but *your test commits you to one reading of a sentence that has two*
@@ -95,13 +95,13 @@
   - → before: an agent about to change a declared interface ≥1 other already builds on · the one preempt exception
   - → after: done claimed while depended-on files moved since the last green run · correction is re-verify, not stop writing
   - → metric: test success, paid at integration after both agents' tokens are spent
-  - Observed: the lead writing `huddle/config.py` and `huddle/web/http.py` **up front, before spawning anyone** removed this failure mode from the run entirely — both were imported at decisions 48, 80, 83 and never modified. A tool that stopped the lead there would have made the run worse
+  - Observed: the lead writing `huddle/config.py` and `huddle/web/http.py` **up front, before spawning anyone** removed this failure mode from the run entirely, both were imported at decisions 48, 80, 83 and never modified. A tool that stopped the lead there would have made the run worse
 - **Conflict** → contention for something only one holder can have · *Worse Together* arXiv 2610.00583 · peer-to-peer teams reach 12–30% of optimal
   - → ownership widened from files to runtime resources · metric: time and tokens, spent twice
   - → detect: `kill`/`pkill`/`fuser`, or a port bind, against a registry entry owned by someone else
   - **Zero instances in both recordings.** Every agent took an isolated port, and across 111 decisions on the clean run no subagent ever wrote a file it did not own. Nothing here tests this path
 - Not a separate alarm channel → each is a preference-or-requirement departure, gated on a metric, ranked by it. Collusion sorts top because it attacks the metric that sorts first
-- The mapping is a derivation, not a judgement → P3 verification ⇒ collusion · P2 interfaces ⇒ miscoordination · P1 ownership ⇒ conflict · P4 ⇒ none. **Collusion is how the test metric declines unnoticed; miscoordination is how it declines several handoffs after the cause; conflict is how work gets paid for twice inside a fixed budget** — each is a mechanism by which a metric falls, which is why one channel carries both
+- The mapping is a derivation, not a judgement → P3 verification ⇒ collusion · P2 interfaces ⇒ miscoordination · P1 ownership ⇒ conflict · P4 ⇒ none. **Collusion is how the test metric declines unnoticed; miscoordination is how it declines several handoffs after the cause; conflict is how work gets paid for twice inside a fixed budget**, each is a mechanism by which a metric falls, which is why one channel carries both
 
 ## 6 · When surfacing happens, and why
 
@@ -124,7 +124,7 @@ Nothing is said for 600 seconds after something is said, and when the window ope
 4. **Band** → in order: judge unavailable → silent · `departs` with no metric → silent · trigger not structural → silent · ≥0.85 → hold (degraded to check if our own recent precision is under 0.70) · ≥0.50 → check · else silent
 5. **Enqueue** → block label = **what was cited**, preferences and requirements together. Same label joins the open block; a new label opens one. Three agents breaking one requirement is **one** recommendation, and each flag inside keeps its own evidence, correction and cost
 6. **Who is due** →
-   - window check: has 600s passed since the last thing **shown or answered**? The window used to key on answers alone, which was correct only while a hold was the only thing delivered — a hold is always answered, so being shown and being answered were the same event. A check is never answered, so keying on answers would leave the window permanently open and let checks flood: the alert-fatigue failure the window exists to prevent
+   - window check: has 600s passed since the last thing **shown or answered**? The window used to key on answers alone, which was correct only while a hold was the only thing delivered, a hold is always answered, so being shown and being answered were the same event. A check is never answered, so keying on answers would leave the window permanently open and let checks flood: the alert-fatigue failure the window exists to prevent
    - sort the waiting blocks by `(metric_rank, structural, −confidence, arrival)`
    - preempt: if the window is closed, one jump per hour for an interface change with live dependents, because no later correction fixes it
 7. **Is it me?** → shown only if the due block is this decision's block. Otherwise it stays queued
@@ -140,7 +140,7 @@ Nothing is said for 600 seconds after something is said, and when the window ope
 
 ### What the queue means for measurement
 
-- When a block is shown, **every member of it has reached the user** — that is the "one recommendation at a time, a repeat inherits the answer" rule
+- When a block is shown, **every member of it has reached the user**, that is the "one recommendation at a time, a repeat inherits the answer" rule
 - Scoring only the exact decision index produced a false miss: two decisions citing the same thing sat in one block of size 2, the block was shown, and one of them was recorded as silently missed. Both scorers now credit block delivery and record the **lag**, because late is not free
 
 ## 8 · The orchestration gap period
@@ -149,12 +149,12 @@ The tool is blind in four distinct ways, and three of them are structural rather
 
 - **Cold start** → the registry and the dependency map are empty at T+0 and grow from the event log. Conflict is undetectable until two agents have touched the same resource; miscoordination is undetectable until someone imports something. On the clean recording the first interface write lands at decision 14 and the first import at 48 → a **34-decision window** in which the two live lists cannot fire. This is correct behaviour, not a defect: an interface with no dependents costs nothing to rewrite. But it means early structural errors are found late or not at all
 - **Events that fire no hook** → only tool calls are seen. A merge, a reassignment, a re-plan, a decision taken inside the orchestrator's own reasoning produce no `PreToolUse` event and are invisible. The design's first principle is *oversee the decision, not the action*, and it is enforced only where a hook exists
-- **The quiet window** → 600 seconds in which nothing can be said, by design. An item arriving inside it waits; if its block is outranked when the window reopens, it waits again. Shrinking the window would raise recall by destroying the thing it protects — override rates rise with alert volume independently of correctness (Ancker et al. 2017) — so it is left alone and the cost is carried honestly
+- **The quiet window** → 600 seconds in which nothing can be said, by design. An item arriving inside it waits; if its block is outranked when the window reopens, it waits again. Shrinking the window would raise recall by destroying the thing it protects, override rates rise with alert volume independently of correctness (Ancker et al. 2017), so it is left alone and the cost is carried honestly
 - **The model is built once** → `task_model.json` is extracted before the run and never refreshed. Files appearing later add no requirements. This is why the graded set had to become directory-shaped: the alternative is a list that describes a tree that does not exist yet
 
 ## 9 · Implementation, component by component
 
-### Extractor — runs once, before any work
+### Extractor, runs once, before any work
 
 - Input: the PRD (60,000 chars), the developer's decomposition instructions, the budget → output `task_model.json`
 - One requirement per graded area, each with its verbatim `spec_quote` verified against the source
@@ -163,7 +163,7 @@ The tool is blind in four distinct ways, and three of them are structural rather
 - Also emits the graded file set and the graded directories
 - Output is a file the developer can read and edit → which is what makes every later flag quote them rather than assert the tool's opinion
 
-### Filter — plain code in a `PreToolUse` hook
+### Filter, plain code in a `PreToolUse` hook
 
 - **Path B, in order**: the specific triggers run before the general one, because `graded_file` is true of every test file an agent legitimately writes and naming what is wrong with the content is strictly more useful
   - `disabled_check` → test-shaped path **and** a body containing `if False`, `@skip`, `pytest.mark.xfail`, `.skipTest(`, `assert True`
@@ -176,7 +176,7 @@ The tool is blind in four distinct ways, and three of them are structural rather
 - `action_text` → the path first so it survives truncation, then the body from `content` (not `new_string`, which is why a `Write` once reached the judge as a bare filename)
 - `_salient` → head, then **every test, fixture and suite the file declares**, then every line that looks like a disabled check, then the tail, with the elision declared. Two separate failures forced this: an `if False` sitting at character 5,646 of a 15KB file, and the judge answering a coverage question about a 33KB suite with *"the snippet is just the start of a real test file"*
 
-### Judge — one `claude -p` call per surviving action
+### Judge, one `claude -p` call per surviving action
 
 - `--output-format json --model claude-sonnet-5`, appended system prompt, `MAX_THINKING_TOKENS=0`, 45s timeout, no tools, neutral cwd with `CLAUDE_PROJECT_DIR` unset so it cannot inherit the task's hooks or pollute its event log
 - Inputs: the preference records, the requirement records, **the requirements that declare this file as their check with the brief's own words** (ranked by relevance to the action, because one monolithic test file had 17 pointing at it), the action, the child's own brief, the parent's state
@@ -184,16 +184,16 @@ The tool is blind in four distinct ways, and three of them are structural rather
 - Validated, not trusted: every `pref_id`/`req_id` must be one given; `departs` requires ≥1 evidence pair; `said` must quote the source; a `departs` with no metric is gated to silence
 - Fail-open: timeout or malformed JSON → `source: unavailable` → silent → work proceeds
 
-### Policy — all code, no model
+### Policy, all code, no model
 
 - Band, metric gate, structural gate, grouping on `grounds`, the four-term rank, the 600s window on *shown or answered*, one preempt per hour, precision floor at 0.70 over the last 5 answered holds
 - DAG opens itself only on a confident hold, focused on that node
 
-### The answer — closes the loop
+### The answer, closes the loop
 
 - Recorded per flag inside the block, not per block, so one answer can fan out or apply to one
 - Delivered to the proposing agent in the user's own words, as an instruction on its next tool call
-- Written back as a preference with `source: human` — which the next filter pass and the next judge call both use, and which needs no provenance check because the developer did write it
+- Written back as a preference with `source: human`, which the next filter pass and the next judge call both use, and which needs no provenance check because the developer did write it
 - Invalidates the cache by changing the rules half of every key
 - Recorded in the intervention log with band, confidence, what was cited and what the user chose → which is also the dataset for measuring whether surfaced moments were ones people wanted
 
@@ -203,4 +203,4 @@ The tool is blind in four distinct ways, and three of them are structural rather
 - `simuser.py` is shown the action, the rule in the developer's own words or the brief's own sentence, **the provenance including an explicit note when a rule was inferred rather than quoted**, the conflicting part, the predicted cost and the suggested correction
 - It is **not** shown the confidence or the band → a stand-in that can see the confidence grades the tool's self-report rather than the evidence
 - It answers `block` / `note` / `ignore`, and `ignore` is made easy to pick: *an agent working inside files it owns, doing ordinary work, is ignore even if a rule's words appear nearby. Do not reward the tool for pattern-matching*
-- It is not a human study and is not reported as one. It answers *if a developer acted on these flags the way a reasonable developer would, what happens to the run* — not *what do developers do*
+- It is not a human study and is not reported as one. It answers *if a developer acted on these flags the way a reasonable developer would, what happens to the run*, not *what do developers do*

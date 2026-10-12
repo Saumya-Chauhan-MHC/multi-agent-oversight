@@ -1,0 +1,96 @@
+<!doctype html>
+<meta charset="utf-8"><title>oversight</title>
+<style>
+ :root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--fg:#c9d1d9;--dim:#8b949e;
+       --hold:#ff7b72;--check:#d2a8ff;--ok:#7ee787;--blue:#79c0ff}
+ *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);
+   font:13px/1.55 ui-monospace,Menlo,monospace}
+ header{padding:10px 18px;border-bottom:1px solid var(--line);display:flex;gap:22px;align-items:baseline}
+ header b{color:#fff;font-size:14px} .muted{color:var(--dim)}
+ .wrap{display:grid;grid-template-columns:1fr 430px;height:calc(100vh - 42px)}
+ .graph{padding:22px;overflow:auto} .side{border-left:1px solid var(--line);overflow:auto;padding:16px}
+ .row{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+ .node{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:11px 13px;
+       min-width:205px;max-width:250px}
+ .node.hold{border-color:var(--hold)} .node.check{border-color:var(--check)}
+ .node .nm{color:#fff;font-weight:600} .node .fls{color:var(--dim);font-size:11.5px;margin-top:5px;
+   word-break:break-all;line-height:1.5}
+ .pill{display:inline-block;padding:0 7px;border-radius:9px;font-size:11px;margin-right:5px}
+ .p-hold{background:#49222088;color:var(--hold)} .p-check{background:#3b2a5588;color:var(--check)}
+ .p-silent{background:#21262d;color:var(--dim)}
+ .lane{margin:26px 0 8px;color:var(--dim);font-size:11px;letter-spacing:.09em;text-transform:uppercase}
+ .edge{color:var(--dim);font-size:11.5px;margin:3px 0}
+ .edge b{color:var(--blue);font-weight:500}
+ h3{margin:18px 0 8px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+ .flag{border-left:2px solid var(--check);padding:8px 11px;margin:9px 0;background:var(--panel)}
+ .flag.hold{border-left-color:var(--hold)}
+ .flag .hd{color:#fff} .flag .bd{color:var(--dim);margin-top:5px;font-size:12px}
+ .flag .fix{color:var(--ok);margin-top:5px;font-size:12px}
+ table{width:100%;border-collapse:collapse;font-size:12px} td{padding:3px 6px 3px 0;vertical-align:top}
+ td.k{color:var(--blue);white-space:nowrap} .inferred{color:var(--hold)}
+</style>
+<header>
+  <b>oversight</b>
+  <span id="hdr" class="muted">loading</span>
+  <span id="win" class="muted"></span>
+</header>
+<div class="wrap">
+  <div class="graph">
+    <div class="lane">who is working, and what they have touched</div>
+    <div id="nodes" class="row"></div>
+    <div class="lane">who depends on whose work</div>
+    <div id="edges"></div>
+  </div>
+  <div class="side">
+    <h3>raised</h3><div id="flags"></div>
+    <h3>waiting in the queue</h3><div id="queue" class="muted"></div>
+    <h3>preferences, from your own brief</h3><table id="prefs"></table>
+  </div>
+</div>
+<script>
+const esc = s => String(s == null ? "" : s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+async function tick(){
+  const s = await (await fetch("/state")).json();
+  const b = s.totals.bands;
+  document.getElementById("hdr").innerHTML =
+    `${s.totals.judgements} judgements` +
+    ` <span class="pill p-hold">${b.hold||0} hold</span>` +
+    `<span class="pill p-check">${b.check||0} check</span>` +
+    `<span class="pill p-silent">${b.silent||0} silent</span>`;
+  document.getElementById("win").textContent = s.window_open ? "window open" : "quiet window";
+
+  document.getElementById("nodes").innerHTML = s.agents.map(a => {
+    const worst = a.flags.some(f => f.band === "hold") ? "hold"
+                : a.flags.some(f => f.band === "check") ? "check" : "";
+    return `<div class="node ${worst}">
+      <div class="nm">${esc(a.id === "orchestrator" ? "lead" : a.short)}</div>
+      <div>${Object.entries(a.bands).map(([k,v]) =>
+        `<span class="pill p-${k}">${v} ${k}</span>`).join("")}</div>
+      <div class="fls">${a.writes.map(esc).join("<br>") || "nothing written yet"}</div></div>`;
+  }).join("");
+
+  document.getElementById("edges").innerHTML = s.edges.length
+    ? s.edges.map(e => `<div class="edge">${esc(e.src.slice(0,9))} builds on
+        <b>${esc(e.dst.slice(0,9))}</b> &nbsp;${e.files.map(esc).join(", ")}</div>`).join("")
+    : `<div class="edge">nothing depends on anything yet</div>`;
+
+  const fl = s.agents.flatMap(a => a.flags.map(f => ({...f, who: a.short})));
+  document.getElementById("flags").innerHTML = fl.length ? fl.map(f => `
+    <div class="flag ${f.band === "hold" ? "hold" : ""}">
+      <div class="hd">${f.band.toUpperCase()} &middot; ${esc(f.who)} &middot; ${esc(f.grounds.join(", "))}</div>
+      <div class="bd">${esc(f.action)}</div>
+      <div class="bd">cost (${esc(f.metric)}): ${esc(f.consequence)}</div>
+      <div class="fix">instead: ${esc(f.correction)}</div>
+      <div class="bd">risk: ${esc(f.risk || "none")} &middot; found by ${esc(f.trigger)}</div>
+    </div>`).join("") : `<div class="muted">nothing raised</div>`;
+
+  document.getElementById("queue").innerHTML = s.queue.length
+    ? s.queue.map(q => `${esc(q.label)} &times;${q.n}`).join("<br>")
+    : "empty";
+
+  document.getElementById("prefs").innerHTML = s.preferences.map(p =>
+    `<tr><td class="k">${esc(p.id)}</td><td>${esc(p.rule.slice(0,120))}
+     ${p.quoted ? "" : '<span class="inferred">[inferred, not your words]</span>'}</td></tr>`).join("");
+}
+tick(); setInterval(tick, 2000);
+</script>

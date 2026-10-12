@@ -1,0 +1,114 @@
+{
+ "label": "E",
+ "app": "/Users/saumya/research/arm_e_final",
+ "at": "2026-10-11T15:24:05",
+ "cua_excluded": true,
+ "playwright": false,
+ "gates": [
+  {
+   "gate": "api",
+   "exit": 1,
+   "ok": false,
+   "passed": 123,
+   "failed": 6,
+   "total": 129,
+   "seconds": 33.6,
+   "tail": [
+    "PASSED test_ordering.py::test_events_have_dense_monotonic_seq_under_concurrent_writes",
+    "PASSED test_ordering.py::test_resume_replays_missed_events_in_order_without_gaps",
+    "PASSED test_ordering.py::test_resume_replays_fully_or_emits_gap_after_long_history",
+    "PASSED test_ordering.py::test_subscribe_without_resume_gets_only_live_events",
+    "PASSED test_load.py::test_concurrent_fanout_stays_within_latency_budget",
+    "FAILED test_profiles.py::test_patch_users_me_rejects_too_long_avatar_url - as...",
+    "FAILED test_profiles.py::test_patch_users_me_rejects_too_long_status_text_and_display_name",
+    "FAILED test_read_state.py::test_read_cursor_never_moves_backwards - assert 0 ...",
+    "FAILED test_channels_extra.py::test_leave_channel_is_idempotent_and_removes_membership",
+    "FAILED test_groups.py::test_at_group_excludes_non_channel_members - assert 11...",
+    "FAILED test_roles.py::test_admin_cannot_promote_to_admin - AssertionError: 200",
+    "6 failed, 123 passed in 33.51s"
+   ]
+  },
+  {
+   "gate": "irc",
+   "exit": 0,
+   "ok": true,
+   "passed": 11,
+   "failed": 0,
+   "total": 11,
+   "seconds": 6.4,
+   "tail": [
+    "PASSED test_irc.py::test_irc_rejects_bad_password",
+    "PASSED test_irc.py::test_irc_registration_emits_welcome_sequence",
+    "PASSED test_irc.py::test_irc_ping_pong",
+    "PASSED test_irc.py::test_irc_join_unknown_channel_returns_403",
+    "PASSED test_irc.py::test_irc_join_emits_prefix_then_332_353_366",
+    "PASSED test_irc.py::test_irc_privmsg_shows_up_on_web_with_seq",
+    "PASSED test_irc.py::test_web_post_is_delivered_to_irc_as_privmsg",
+    "PASSED test_irc.py::test_irc_unknown_command_returns_421",
+    "PASSED test_irc.py::test_irc_nick_collision_returns_433_without_closing",
+    "PASSED test_irc.py::test_mixed_irc_and_web_writers_keep_seq_dense",
+    "PASSED test_irc.py::test_irc_quit_leaves_cleanly",
+    "11 passed in 6.27s"
+   ]
+  },
+  {
+   "gate": "crash",
+   "not_runnable": "no /proc on this platform; the gate kills a node or the pub/sub daemon by scanning the process table",
+   "ok": null,
+   "passed": null,
+   "failed": null,
+   "total": null
+  },
+  {
+   "gate": "chaos",
+   "not_runnable": "no /proc on this platform; the gate kills a node or the pub/sub daemon by scanning the process table",
+   "ok": null,
+   "passed": null,
+   "failed": null,
+   "total": null
+  },
+  {
+   "gate": "frontend",
+   "exit": 0,
+   "ok": true,
+   "passed": 3,
+   "failed": 0,
+   "total": 3,
+   "seconds": 0.1,
+   "tail": [
+    "...                                                                      [100%]",
+    "==================================== PASSES ====================================",
+    "=========================== short test summary info ============================",
+    "PASSED test_frontend.py::test_root_is_html",
+    "PASSED test_frontend.py::test_required_testids_present",
+    "PASSED test_frontend.py::test_serves_javascript_bundle",
+    "3 passed in 0.05s"
+   ]
+  }
+ ],
+ "start_sh_present": true,
+ "booted_via": "start.sh",
+ "supervisor": true,
+ "health_seconds": 2,
+ "health": true,
+ "irc_port_open": true,
+ "redis_port_open": true,
+ "own_suite": {
+  "exit": 1,
+  "total": 86,
+  "failed": 2,
+  "passed": 84
+ },
+ "anti_cheat": true,
+ "anti_cheat_out": "anti-cheat: PASS \u2014 scanned /Users/saumya/research/arm_e_final, no tripwires matched\n",
+ "gates_not_runnable": [
+  "crash",
+  "chaos"
+ ],
+ "gates_passed": 2,
+ "gates_total": 3,
+ "tests_passed": 137,
+ "tests_total": 143,
+ "official_reward": null,
+ "official_reward_note": "undeterminable on this platform: the binary reward needs all five gates and crash, chaos cannot run here"
+}

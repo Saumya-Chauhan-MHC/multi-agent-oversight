@@ -17,8 +17,7 @@ areas** and eight graded suites with no requirement record at all.
 - `prd[:60000]`, and the instruction is now *one requirement per graded area, not a tidy summary*
 - same brief now yields **17 requirements** instead of 7
 
-**Requirements kept a paraphrase and threw the specification away.** A one-line summary —
-*"Workspaces/channels CRUD, roles, membership semantics function per contract"* — cannot be
+**Requirements kept a paraphrase and threw the specification away.** A one-line summary, *"Workspaces/channels CRUD, roles, membership semantics function per contract"*, cannot be
 compared against anything. 7 of 8 requirements yielded no checkable term.
 
 - every requirement now carries `spec_quote`: the brief's own sentences, copied verbatim and
@@ -27,10 +26,10 @@ compared against anything. 7 of 8 requirements yielded no checkable term.
 
 **A rule claimed as the developer's words was never checked against their words.** The extractor
 produced *"each component agent owns and must pass its own test directory before considering its
-piece done"* with `source: decomposition`. That sentence is **not in the contracts file** — the
+piece done"* with `source: decomposition`. That sentence is **not in the contracts file**, the
 ownership table grants an agent its test directory and nothing says it must pass it. Five draws with
 quote verification produce it zero times. The tool was quoting the developer a sentence they never
-wrote, and `source` — the field that exists to separate quoted from inferred — was the thing that
+wrote, and `source`, the field that exists to separate quoted from inferred, was the thing that
 lied.
 
 - a preference claiming `prd` or `decomposition` must now return the **source sentence**, which is
@@ -56,13 +55,13 @@ may cite a `req_id`: the brief says what must work and names the file that prove
 check that cannot do its job breaks the requirement directly, and the evidence shown is the brief's
 own sentence.
 
-- `taskmodel.declaring_requirements(tm, path)` — the requirements whose declared check this file is,
+- `taskmodel.declaring_requirements(tm, path)`, the requirements whose declared check this file is,
   matched by file **or containing directory**
 - the judge's payload carries those requirements with their spec quotes, ordered by how little of
   each one's contract the action mentions
 - `_validate` accepts `req_id` alongside `pref_id` and rejects a requirement whose check this file
   is not
-- `policy.enqueue` groups on `grounds` — preferences and requirements together — so two agents
+- `policy.enqueue` groups on `grounds`, preferences and requirements together, so two agents
   breaking one requirement is still one recommendation
 
 ---
@@ -74,14 +73,14 @@ handed a bare filename.
 
 **A long file lost the part that mattered.** Truncating at 4,000 characters dropped an `if False`
 sitting at character 5,646 of a 15KB test. And asked whether a 33KB suite covered what the brief
-requires, the judge answered on the first 3KB — in its own words, *"the snippet is just the start of
+requires, the judge answered on the first 3KB, in its own words, *"the snippet is just the start of
 a real test file."*
 
 - `_salient()` keeps the head, then **every test, fixture and suite the file declares**, then every
   line that looks like a disabled or skipped check, then the tail, with the elision declared
 - a file's test names are its table of contents: without them the coverage question is unanswerable
 
-**The graded file set was whatever test files existed when the extractor ran** — on a greenfield task
+**The graded file set was whatever test files existed when the extractor ran**, on a greenfield task
 that is none of them, so it fell back to the literal paths the extractor guessed, and the agent wrote
 different ones.
 
@@ -108,8 +107,8 @@ rewriting the same path later shared a verdict. The key now includes the agent.
 
 ## 4 · The judge prompt
 
-- **ownership answers the ownership question and nothing else.** One line — *"an action its own brief
-  authorises is a fit"* — let ownership settle verification and interface questions too, and passing
+- **ownership answers the ownership question and nothing else.** One line, *"an action its own brief
+  authorises is a fit"*, let ownership settle verification and interface questions too, and passing
   an agent its own brief took every metric to zero. The categories are now evaluated separately, and
   the brief is **withheld** when a structural lookup has established a fact ownership cannot answer
 - **a check that cannot fail is a departure even in a file the agent owns.** Owning the test file is
@@ -129,13 +128,13 @@ putting medium-confidence items in the check band, correctly, and printing none 
   answered, so being shown and being answered used to be the same event; a check is never answered,
   and keying the quiet window on answers alone would leave it permanently open and let checks flood
 
-**Word overlap could interrupt.** It is a recall net — it exists to get a decision in front of the
+**Word overlap could interrupt.** It is a recall net, it exists to get a decision in front of the
 judge when no deterministic lookup matched. Across two recordings it produced 0 of 8 correct flags.
 
 - an item whose only support is word overlap is **capped at silence**: still judged, still recorded,
   no vote on interrupting
 - this matters more than a precision number suggests. With one channel rationed to one item every
-  ten minutes, a false positive is not noise — **it is a true positive displaced**
+  ten minutes, a false positive is not noise, **it is a true positive displaced**
 
 **`policy.due()` spent the hourly preempt budget on a read.** A status check could silently disarm
 the one interruption allowed per hour.
@@ -174,7 +173,7 @@ The key is now:
 ## 7 · A stand-in developer, for unattended runs
 
 `OV_SIMUSER=1`. Exists because a treatment run with nobody to ask raised six holds and eleven checks
-that all went nowhere, and reproduced the control exactly — it measured the cost of oversight when
+that all went nowhere, and reproduced the control exactly, it measured the cost of oversight when
 ignored, not its effect.
 
 - shown: the action, the rule in the developer's own words **or the brief's own sentence**, the
@@ -193,7 +192,7 @@ These are measurement, not the tool, and they were wrong in ways that produced p
 
 - **the replay never modelled the land stage.** The live hook drops an item from the queue once its
   action has happened; the replay did not, so the top-ranked block was one whose action had already
-  landed — which can never be the current decision — and nothing was ever shown again
+  landed, which can never be the current decision, and nothing was ever shown again
 - **`grounds` was dropped in the verdict-reuse path**, so every block was labelled `?`, they
   collapsed into one, and showing any member credited all of them: a recall of 1.00 that meant
   nothing. Reused verdicts now re-derive their grounds from the stored evidence
