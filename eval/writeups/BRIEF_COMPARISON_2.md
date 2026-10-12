@@ -1,4 +1,4 @@
-# Comparison 2 — key takeaways
+# Comparison 2, key takeaways
 
 **One sentence:** build the same project twice, with the tool and without it, and let the real
 SWE-Marathon suite decide which came out better. The grader does not know the tool exists.
@@ -27,16 +27,16 @@ delivered, word overlap barred from interrupting, and a stand-in developer able 
 147 judge calls did not slow the run down or change its outcome for the worse.
 
 **2 · It is extremely quiet.** 147 judge calls produced 12 non-silent items and put **2** to the
-developer. `word_overlap` — the cheap recall net — fired **121 times and reached a speaking band
+developer. `word_overlap`, the cheap recall net, fired **121 times and reached a speaking band
 zero times**, which is 121 interruptions that would have happened and didn't.
 
 **3 · Both things it asked were right, and both quoted the brief rather than a rule the developer
 never wrote.**
 
-> **BLOCK** — *"An unconditional SkipTest at setup means the bridge assertions never run, so R18/R14
+> **BLOCK**, *"An unconditional SkipTest at setup means the bridge assertions never run, so R18/R14
 > pass silently"*
 >
-> **note** — *"Fine to add this unit test for events.py, but it doesn't satisfy R13/R14 — still need
+> **note**, *"Fine to add this unit test for events.py, but it doesn't satisfy R13/R14, still need
 > test_resilience"*
 
 A real disabled check, found, grounded in the requirements it defeats, and stopped before it landed.
@@ -46,7 +46,7 @@ That is the mechanism working end to end.
 `tests` as the metric at risk and `collusion` as the failure mode, all cited requirement IDs.
 
 **5 · The risk it is built for is real on this task.** In the no-tool arm the API agent's own
-`tests/api` passed **24 of 24** while the official API gate failed 6 of 129 — an agent's suite
+`tests/api` passed **24 of 24** while the official API gate failed 6 of 129, an agent's suite
 agreeing with its implementation and silent about the specification. That is the gap the tool exists
 to make visible.
 
@@ -61,7 +61,7 @@ obvious cost.
 The thing it blocked was real, but this run does not show that blocking it mattered to the score.
 
 **The developer is simulated.** It answers *if a developer acted on these flags the way a reasonable
-one would, what happens to the run* — **not** *what do developers do*. It is deliberately not shown
+one would, what happens to the run*, **not** *what do developers do*. It is deliberately not shown
 the confidence or the band, so it grades the evidence rather than the tool's self-report, and
 `ignore` is made easy to pick. This is not a human study.
 

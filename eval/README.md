@@ -12,12 +12,12 @@ Two separate exercises, answering different questions.
 Replay a recorded run decision by decision and ask, at each one, whether the tool's choice to speak
 or stay quiet was right. Scored against an answer key written by hand before the tool was replayed.
 
-The recording comes from a run with **no tool active** — hooks that append to a log and return
+The recording comes from a run with **no tool active**, hooks that append to a log and return
 nothing, so they cannot pause a tool call, inject text or reach the agent. Ground truth has to come
 from an unobserved run: if the tool had been speaking during the build, the key would describe a
 world the tool created.
 
-| | `clean-recording/` |
+| | `control-arm/` |
 |---|---|
 | decisions | 111 |
 | golden positives | 2 |
@@ -33,7 +33,7 @@ an earlier generation of hooks that injected preference lines into the agent's o
 it was never a clean control. The non-replication stands as a limit on the figures above regardless,
 and with two golden positives it is what you would expect: **nothing here is a rate.**
 
-`clean-recording/` holds:
+`control-arm/` holds:
 
 | file | what it is |
 |---|---|
@@ -44,6 +44,8 @@ and with two golden positives it is what you would expect: **nothing here is a r
 | `scores.json`, `scores_bands.json`, `scores_outcome.json` | the scored output |
 | `task_model.json` | the preferences and requirements extracted before the run |
 | `decisions_readable.txt` | the decisions in human-readable form, for reading alongside the key |
+| `trajectory.jsonl` | the recording itself, trimmed to what the replay reads |
+| `grade_report.json` | the real suite's verdict on what this run built |
 
 ### What a label records
 
@@ -61,7 +63,7 @@ and with two golden positives it is what you would expect: **nothing here is a r
 | `would_help` | had the developer acted here, would that test have passed |
 | `satisfied_after` | glad / neutral / annoyed, judged **after** the grader's verdict |
 
-The last three exist only on `clean-recording/`, because only that run was graded by the real suite.
+The last three exist only on `control-arm/`, because only that run was graded by the real suite.
 Before that, `metric: tests` was a prediction nobody could check.
 
 ## Comparison 2 · does the project come out better with the tool?
@@ -80,9 +82,10 @@ official tests passed        137/143            137/143
 runnable gates passed        2/3                2/3
 ```
 
-`arms/` holds both grade reports, the treatment arm's task model, and its 149 judgement and
-developer-answer records. The full event logs are not committed; they are large and the judgements
-are the part anyone needs.
+`treatment-arm/` holds that run's task model, its 149 judgement and developer-answer records, and
+its grade report. The control's grade report is in `control-arm/`, because the control of
+comparison 2 and the recording labelled by comparison 1 are **the same run**: one build of the task
+with no tool active, doing both jobs.
 
 Two of the five correctness gates, `crash` and `chaos`, walk `/proc` to find the process holding a
 port, so they cannot run on macOS. They are recorded as **void, not failed**, which is why only
@@ -113,6 +116,17 @@ And what is not:
 | one run per arm means no effect size | comparison 2 measures the absence of an obvious cost, not a benefit |
 | nothing was prevented | the stand-in blocked one real thing and the official score was unchanged |
 | the key and the system share an author | `human_confirmed` is empty on all 184 rows |
+
+## Layout
+
+| folder | what is in it |
+|---|---|
+| `control-arm/` | the run with no tool: its recording, the answer key, the replay, the scores, and its grade |
+| `treatment-arm/` | the run with the tool active: its model, its judgements, and its grade |
+| `code/` | the replay harness, three scorers, the label-derivation check, the grader |
+| `writeups/` | both comparisons, short and in full, plus the design |
+
+Every folder has its own README.
 
 ## Code
 
