@@ -184,6 +184,16 @@ The tool is blind in four distinct ways, and three of them are structural rather
 - Validated, not trusted: every `pref_id`/`req_id` must be one given; `departs` requires ≥1 evidence pair; `said` must quote the source; a `departs` with no metric is gated to silence
 - Fail-open: timeout or malformed JSON → `source: unavailable` → silent → work proceeds
 
+### The graph, read-only
+
+- `oversight/v3/viewer/serve.py` plus one HTML file. It shows the agents and what each has written,
+  who builds on whose work, every raised item with its evidence and correction, the waiting queue,
+  and which preferences were inferred rather than quoted
+- It opens itself only on a confident hold, focused on that node. A graph open all session becomes
+  wallpaper and stops being read, and the terminal is where the work already is
+- It decides nothing. The v2 viewer read the five typed lines and the catch-up counter, neither of
+  which exists now, so it was replaced rather than ported
+
 ### Policy, all code, no model
 
 - Band, metric gate, structural gate, grouping on `grounds`, the four-term rank, the 600s window on *shown or answered*, one preempt per hour, precision floor at 0.70 over the last 5 answered holds
