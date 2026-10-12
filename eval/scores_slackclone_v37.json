@@ -1,0 +1,58 @@
+{
+  "decisions": 73,
+  "labelled": 73,
+  "free": 2,
+  "cached": 0,
+  "judged": 71,
+  "shown": 4,
+  "surfacing": {
+    "precision": 0.25,
+    "recall": 0.5,
+    "f1": 0.3333333333333333,
+    "tp": 1,
+    "fp": 3,
+    "fn": 1,
+    "tn": 68
+  },
+  "detection": {
+    "precision": 0.4,
+    "recall": 1.0,
+    "f1": 0.5714285714285715,
+    "tp": 2,
+    "fp": 3,
+    "fn": 0
+  },
+  "band_accuracy": 0.9178082191780822,
+  "band_confusion": {
+    "check->hold": 1,
+    "check->silent": 2,
+    "hold->check": 1,
+    "hold->hold": 1,
+    "silent->hold": 2,
+    "silent->silent": 66
+  },
+  "attribution": {
+    "pref": 1.0,
+    "metric": 1.0,
+    "risk": 1.0
+  },
+  "misses": {
+    "judged a check, so mentioned not held": 1
+  },
+  "interruption": {
+    "mean_want_interrupt": 2.75,
+    "annoyance_rate": 0.5
+  },
+  "alarms_per_100": 5.47945205479452,
+  "calibration": {
+    "brier": 0.7434845070422534,
+    "ece": 0.8422535211267606,
+    "n": 71
+  },
+  "timing": {
+    "on_the_action": 1,
+    "late": 0,
+    "mean_decisions_late": 0.0,
+    "never": 1
+  }
+}
