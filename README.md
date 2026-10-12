@@ -103,8 +103,8 @@ The output is `task_model.json`, a file you can read and edit.
 > Why that check exists, and the invented rule that made it necessary, are in
 > [docs/IMPLEMENTATION_CHANGES.md, section 1](docs/IMPLEMENTATION_CHANGES.md#1--the-extractor).
 
-**2 · During the run, a filter runs on every tool call.** *(Plain code. No model, no cost.)* Most
-calls stop here and are never looked at again.
+**2 · During the run, a filter runs on every tool call.** Most calls stop here and are never
+looked at again.
 
 What gets past it is decided by **six lookups**, each a plain set-membership or graph check with no
 model involved. They ask things like: is this file one the grader runs? Is this port owned by a
@@ -148,26 +148,6 @@ nothing, and ignoring it is a valid answer. Everything else is recorded and show
 > was *answered*, and where the tool is blind, are in
 > [docs/DESIGN.md, sections 7 and 8](docs/DESIGN.md#7--the-queue-step-by-step).
 
-## Why bother
-
-A single agent's mistake is local. In a multi-agent run it compounds: a bad division of work is
-inherited by every subagent under it, and by the time a test fails the cause is several handoffs
-back. The evidence that you cannot simply read the trace and find it is fairly blunt.
-
-| finding | source |
-|---|---|
-| attributing a multi-agent failure to the step that caused it reaches **14.2%** accuracy | Who&When |
-| participants spent about 10 of 15 minutes reading message history before acting; 2 of 8 reached the right answer | AGDebugger, Epperson et al., CHI 2025 |
-| richer plan-editing controls raised editing interactions and did **not** raise plan quality | AMBIPOM |
-| below roughly **0.70** precision, an alert aid leaves the operator worse off than no aid | Dixon and Wickens 2006 |
-
-So the question is not how to give the developer more control. It is what to show, and when, so a
-compounding error is caught while it is still cheap to undo.
-
-> Each risk, how it is detected and what it costs:
-> [DESIGN section 5](docs/DESIGN.md#5--safety-risks-and-where-they-live). The three conditions that
-> must all hold before anything is said: [DESIGN section 6](docs/DESIGN.md#6--when-surfacing-happens-and-why).
-
 ## Does it work?
 
 Two separate exercises, in [`eval/`](eval/).
@@ -209,14 +189,6 @@ runnable gates passed        2/3         2/3
 
 Identical official outcome, identical wall clock, two interruptions. The keyword path fired 121
 times and reached a speaking band zero times.
-
-**A caution about that own-suite row**, because it is the easiest number here to over-read. The two
-agents wrote different test suites, 49 tests against 86, so 39/49 and 84/86 are not comparable as a
-pass rate and do not show that the tool made the agent write better code. What the row is for is the
-**gap against the official column**. In the no-tool arm the API agent's own `tests/api` passed
-**24 of 24** while the official API gate failed 6 of 129: an agent's suite agreeing with its own
-implementation and silent about the specification. That gap is the thing this tool exists to make
-visible, and comparison 1 shows it was visible to the tool at the moment the suite was written.
 
 **What neither establishes:** two golden positives is not a sample, there is one run per arm so
 there is no effect size, and nothing was demonstrably prevented.
