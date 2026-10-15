@@ -47,7 +47,7 @@ def run(traj_path, rules_path, judge=True, limit=None, verbose=True, out_path=No
         if hit is not None and hit.get("band") != "hold":
             cached_n += 1
             continue
-        v = (judge4.judge(tm, action, trig, bf.get(who, ""), {})
+        v = (judge4.judge(tm, action, trig, bf.get(who, ""), {"acting": who})
              if judge else dict(breaks=False, source="skipped"))
         band = policy4.decide(v, proj)
         policy4.cache_put(proj, key, dict(band=band, breaks=v.get("breaks")))

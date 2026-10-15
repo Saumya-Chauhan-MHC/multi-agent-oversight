@@ -69,6 +69,7 @@ try:
     state = {k: parent.get(k) for k in ("name", "files_written", "children", "running_children")}
 except Exception:
     pass
+state["acting"] = who
 
 t0 = time.time()
 verdict = judge4.judge(tm, action, trigger, brief, state)

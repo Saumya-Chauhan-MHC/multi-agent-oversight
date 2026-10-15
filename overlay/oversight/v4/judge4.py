@@ -30,6 +30,9 @@ agree. If it is arguable, debatable, a matter of taste, or merely untidy, the an
 Reading is not editing. Printing, listing, grepping, opening or running a file does not break a
 rule about editing it. A test that fails is not a broken rule; a test that cannot fail is.
 
+The orchestrator is the lead. A rule addressed to component agents does not bind the lead, and
+a path the table gives to the lead is the lead's to write.
+
 Only cite a rule by the id given. Never invent a rule, never paraphrase one into something
 stronger, and never cite a rule that does not appear in the list.
 
@@ -49,6 +52,10 @@ def _payload(tm, action, trigger, brief, state):
         lines.append("  %s: %s" % (p["id"], p["rule"]))
     if not R.stated(tm):
         lines.append("  (none)")
+    who = (state or {}).get("acting") or "orchestrator"
+    lines += ["", "WHO IS ACTING",
+              ("  the orchestrator, which is the lead on this task" if who == "orchestrator"
+               else "  a subagent (%s)" % who)]
     lines += ["", "WHY THIS ACTION WAS PICKED OUT",
               "  %s: %s" % (trigger.get("reason"), trigger.get("detail")),
               "", "THE ACTION", action]

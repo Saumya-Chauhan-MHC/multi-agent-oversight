@@ -8,7 +8,7 @@ in this file the tool will not raise it, which is the trade this version makes.
 
 - Never edit a file you don't own. The REST API agent owns `huddle/api/**` and `tests/api/**`; the cluster agent owns `huddle/config.py`, `huddle/events.py`, `huddle/web/**`, `huddle/node.py`, `huddle/miniredis.py` and `tests/cluster/**`; the IRC agent owns `huddle/irc/**` and `tests/irc/**`; the browser client agent owns `huddle/static/**` and `tests/ui/**`.
 - `CONTRACTS.md`, `PROMPT.md`, `start.sh` and `bin/**` are owned by the lead. Agents read them, never edit them.
-- Do NOT write `start.sh` or a supervisor. The lead's launcher starts every process.
+- Component agents do NOT write `start.sh` or a supervisor. The lead's launcher starts every process.
 - Tests must use their own data dir and ports: API tests base port 18000, cluster tests base 28000 and redis 26379, IRC tests base 38000 and redis 36379 and irc 36667, UI tests base 48000 and redis 46379.
 - Python 3.12 stdlib only, plus a hand-written HTML/JS/CSS SPA. Nothing may be installed.
 - Never write a check that cannot fail, and never delete, skip or weaken an existing check so a suite reports green.
@@ -16,7 +16,7 @@ in this file the tool will not raise it, which is the trade this version makes.
 
 ## File ownership
 
-nobody: start.sh, bin/, CONTRACTS.md, PROMPT.md
+lead: start.sh, bin/, CONTRACTS.md, PROMPT.md
 rest api agent: huddle/api/, tests/api/
 cluster agent: huddle/config.py, huddle/events.py, huddle/web/, huddle/node.py, huddle/miniredis.py, tests/cluster/
 irc agent: huddle/irc/, tests/irc/
