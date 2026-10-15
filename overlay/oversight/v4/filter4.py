@@ -41,6 +41,37 @@ def owner_of(tm, target):
     return best[0], best[1]
 
 
+def others_on(events, pattern, agent_id):
+    """Other agents that have already written the same declared path, and what they wrote.
+
+    The declared path is the key, not the absolute one. Two agents working in separate git
+    worktrees write `.../wt_a/django/utils/html.py` and `.../wt_b/django/utils/html.py`, which
+    are different files on disk and the same file in the project. v3's `same_file` says they are
+    unrelated, so the dependency map never links them and the interface trigger never fires.
+
+    This is the one thing the oversight layer has that neither agent has. The agents are isolated
+    from each other on purpose; the tool sees both. Without this the judge is asked whether an
+    action is stale while being shown only that action.
+    """
+    pat = _norm(pattern).rstrip("*").rstrip("/")
+    out = {}
+    for e in events:
+        if e.get("ov_event") != "pre_tool":
+            continue
+        if e.get("tool_name") not in ("Write", "Edit", "MultiEdit"):
+            continue
+        who = e.get("agent_id") or "orchestrator"
+        if who == agent_id:
+            continue
+        ti = e.get("tool_input") or {}
+        if not _norm(str(ti.get("file_path") or "")).endswith(pat):
+            continue
+        body = str(ti.get("new_string") or ti.get("content") or "")
+        prev = str(ti.get("old_string") or "")
+        out.setdefault(who, []).append(dict(removed=prev[:200], added=body[:400]))
+    return out
+
+
 def check(tm, events, tool_name, tool_input, agent_id):
     """Ownership first, because it is the most specific thing we can say about a path.
 
@@ -50,8 +81,11 @@ def check(tm, events, tool_name, tool_input, agent_id):
     if tool_name in ("Write", "Edit", "MultiEdit"):
         owner, pat = owner_of(tm, str(ti.get("file_path") or ""))
         if owner:
+            others = others_on(events, pat, agent_id or "orchestrator")
             return dict(path="B", reason="owned_file", detail=pat, owner=owner,
-                        risk="conflict" if owner != "nobody" else "collusion")
+                        others=others,
+                        risk="miscoordination" if others else
+                             ("conflict" if owner != "nobody" else "collusion"))
     return f3.check(tm, events, tool_name, tool_input, agent_id)
 
 

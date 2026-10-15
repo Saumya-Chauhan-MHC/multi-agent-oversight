@@ -30,6 +30,11 @@ agree. If it is arguable, debatable, a matter of taste, or merely untidy, the an
 Reading is not editing. Printing, listing, grepping, opening or running a file does not break a
 rule about editing it. A test that fails is not a broken rule; a test that cannot fail is.
 
+If another agent has already changed this file, check whether the action being judged still
+assumes the old version: calling a function by a name that was renamed away, calling it without
+an argument that became required, or using its result as if the return type had not changed.
+That is a broken rule even though the agent acting could not have known, which is the point.
+
 The orchestrator is the lead. A rule addressed to component agents does not bind the lead, and
 a path the table gives to the lead is the lead's to write.
 
@@ -63,6 +68,15 @@ def _payload(tm, action, trigger, brief, state):
         lines.append("  (the resource is registered to %s)" % trigger["owner"])
     if trigger.get("dependents"):
         lines.append("  (already built on by %s)" % ", ".join(trigger["dependents"]))
+    others = trigger.get("others") or {}
+    if others:
+        lines += ["", "WHAT OTHER AGENTS HAVE ALREADY DONE TO THIS SAME FILE",
+                  "  (they cannot see each other's work; you can)"]
+        for who, edits in list(others.items())[:3]:
+            for ed in edits[-2:]:
+                if ed.get("removed"):
+                    lines.append("  %s removed: %s" % (who[:9], ed["removed"][:160]))
+                lines.append("  %s wrote:   %s" % (who[:9], ed["added"][:260]))
     if brief:
         lines += ["", "WHAT THIS AGENT WAS ASKED TO DO", brief[:1200]]
     if state:
