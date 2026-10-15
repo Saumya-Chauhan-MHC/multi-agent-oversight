@@ -14,12 +14,34 @@ The lookup itself is deliberately dumb: is this path in the ownership table at a
 agent acting is the owner is a question about identity, which the judge answers from the brief,
 because agent ids are opaque strings and the table is written in human names.
 """
-import os
+import os, re
 from ..v3 import filter as f3
 
 
 def _norm(p):
     return (p or "").replace("\\", "/").strip().lstrip("./")
+
+
+CALLISH = re.compile(r"^\s*(?:def |return |.*=\s*)?\w[\w.]*\s*\(")
+
+
+def _squeeze(text, budget):
+    """Keep the head, then the lines that look like definitions or calls.
+
+    A flat head-truncation at 400 characters lost the one line that mattered. In a real diff the
+    changed signature is near the top and the call site that depends on it is further down, past
+    a docstring, so the judge was shown the change and not the thing the change breaks.
+    """
+    t = text or ""
+    if len(t) <= budget:
+        return t
+    lines = t.splitlines()
+    head, rest = lines[:12], lines[12:]
+    picked = [l for l in rest if CALLISH.match(l)]
+    out = "\n".join(head)
+    if picked:
+        out += "\n... \n" + "\n".join(picked)
+    return out[:budget]
 
 
 def owner_of(tm, target):
@@ -68,7 +90,8 @@ def others_on(events, pattern, agent_id):
             continue
         body = str(ti.get("new_string") or ti.get("content") or "")
         prev = str(ti.get("old_string") or "")
-        out.setdefault(who, []).append(dict(removed=prev[:200], added=body[:400]))
+        out.setdefault(who, []).append(dict(removed=_squeeze(prev, 500),
+                                            added=_squeeze(body, 1600)))
     return out
 
 

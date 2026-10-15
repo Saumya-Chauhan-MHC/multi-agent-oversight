@@ -84,6 +84,8 @@ rid = "%s-%d" % (key[:8], int(time.time() * 1000))
 flag = dict(rid=rid, ts=policy4.now(), agent=who, tool=tool, action=action[:300],
             trigger=trigger.get("reason"), risk=trigger.get("risk"),
             dependents=trigger.get("dependents") or [], owner=trigger.get("owner"),
+            others=sorted((trigger.get("others") or {}).keys()),
+            others_n=sum(len(v) for v in (trigger.get("others") or {}).values()),
             band=band, judge_s=judge_s,
             **{k: verdict.get(k) for k in ("breaks", "rule", "said", "does", "why", "fix",
                                            "source")})
