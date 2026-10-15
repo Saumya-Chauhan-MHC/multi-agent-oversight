@@ -38,7 +38,10 @@ def topic(verdict):
     said = (verdict or {}).get("said") or ""
     if said.strip():
         return "q:" + hashlib.sha1(" ".join(said.split()).lower().encode()).hexdigest()[:10]
-    return "x:" + hashlib.sha1(((verdict or {}).get("other_fix") or "")[:80].encode()).hexdigest()[:10]
+    # A hold below a yes can carry neither a sentence nor a clash; key it on what the action does,
+    # so unrelated holds of that kind do not share one remembered answer.
+    v = verdict or {}
+    return "x:" + hashlib.sha1((v.get("other_fix") or v.get("does") or "")[:80].encode()).hexdigest()[:10]
 
 
 def cache_key(action_text, task_sig, agent=""):
@@ -56,10 +59,35 @@ def cache_put(proj, key, verdict):
     _write(proj, "judged.json", c)
 
 
-def decide(verdict):
-    """Two bands. The middle one is gone: it was a notice nobody had to act on, and the
-    confidence number that chose between bands carried no band information."""
-    return "hold" if (verdict or {}).get("breaks") else "silent"
+THRESHOLD = 0.3          # hold when p_violation is at least this (low: recall first)
+
+
+def threshold(proj=None):
+    """OV_THRESHOLD, else "threshold" in control5/settings.json, else THRESHOLD."""
+    for raw in (os.environ.get("OV_THRESHOLD"),
+                (_read(proj, "settings.json", {}) or {}).get("threshold") if proj else None):
+        try:
+            if raw is not None:
+                return max(0.0, min(1.0, float(raw)))
+        except (TypeError, ValueError):
+            pass
+    return THRESHOLD
+
+
+def score(verdict):
+    """The judge's p_violation. A verdict without one scores as its yes/no did."""
+    v = verdict or {}
+    p = v.get("p")
+    return float(p) if isinstance(p, (int, float)) else (1.0 if v.get("breaks") else 0.0)
+
+
+def decide(verdict, thr=THRESHOLD):
+    """Two bands, chosen by one threshold on the judge's p_violation. A judge that could not
+    answer, or quoted a line the task does not contain, stays silent as before."""
+    v = verdict or {}
+    if v.get("source") in ("unavailable", "invalid-quote"):
+        return "silent"
+    return "hold" if score(v) >= thr else "silent"
 
 
 def answer_for(proj, tp):

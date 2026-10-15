@@ -46,10 +46,10 @@ except Exception:
     sys.exit(0)
 
 tool, ti = data.get("tool_name"), (data.get("tool_input") or {})
-if tool not in context.WATCHED:
-    sys.exit(0)                                    # reading breaks nothing; this is not a filter
-                                                   # on judgement, it is the set of acts that can
-                                                   # change the repository at all
+if not context.judged(tool, ti):
+    sys.exit(0)                                    # certainly read-only: the read-only tools and
+                                                   # Bash commands that write nothing and run no
+                                                   # code. Every other action is judged
 
 tk = task.load(PROJ)
 if not task.stated(tk):
@@ -68,8 +68,10 @@ ctx = dict(others=others, separate=sep, target=mine)
 
 key = policy5.cache_key(action, task.signature(tk), who)
 cached = policy5.cache_get(PROJ, key)
-if cached is not None and cached.get("band") != "hold":
-    sys.exit(0)                                    # identical action, same task text, already a no
+thr = policy5.threshold(PROJ)
+if cached is not None and cached.get("band") != "hold" and policy5.score(cached) < thr:
+    sys.exit(0)                                    # identical action, same task text, already
+                                                   # below the threshold in force now
 
 brief = ""
 try:
@@ -86,14 +88,15 @@ try:
 except Exception:
     pass
 
-band = policy5.decide(verdict)
+band = policy5.decide(verdict, thr)
 rid = "%s-%d" % (key[:8], int(time.time() * 1000))
 flag = dict(rid=rid, ts=policy5.now(), agent=who, tool=tool, action=action[:300],
             target=mine, others=sorted(others), others_n=sum(len(v) for v in others.values()),
             separate=sep, band=band, judge_s=judge_s, task_files=tk["files"],
+            p=policy5.score(verdict), threshold=thr,
             **{k: verdict.get(k) for k in ("breaks", "said", "does", "why", "fix",
-                                           "other_fix", "source")})
-policy5.cache_put(PROJ, key, dict(band=band, breaks=verdict.get("breaks")))
+                                           "other_fix", "source", "p_raw")})
+policy5.cache_put(PROJ, key, dict(band=band, breaks=verdict.get("breaks"), p=policy5.score(verdict)))
 align.append_event(PROJ, dict(ov_event="v5_judgement", **flag))
 
 if band != "hold":
@@ -108,8 +111,10 @@ def _notice(flag):
     """What the developer reads. Every line is either their own task text or the agent's action."""
     return "\n".join([
         "[oversight] %s -> %s" % (who, flag["action"][:90].replace("\n", " ")),
-        '  your task says: "%s"' % (flag.get("said") or "(a clash between two agents)"),
-        "  this does:      %s" % (flag.get("does") or "?"),
+        '  your task says: "%s"' % (flag.get("said") or ("(a clash between two agents)"
+                                                       if flag.get("other_fix") else "(no sentence quoted)")),
+        "  this does:      %s  (p=%.2f, holds at %.2f)" % (flag.get("does") or "?", flag["p"],
+                                                          flag["threshold"]),
         "  why:            %s" % (flag.get("why") or ""),
         "  instead:        %s" % (flag.get("other_fix") or flag.get("fix") or ""),
     ])

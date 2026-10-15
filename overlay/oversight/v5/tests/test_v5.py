@@ -49,9 +49,22 @@ check("a no always carries both fix fields",
       all(k in judge5._validate({"breaks": False}, TASK) for k in ("fix", "other_fix")))
 
 # --- there is no filter: context is gathered, nothing is gated -------------------------------
-check("every repository-changing tool is watched",
-      set(context.WATCHED) >= {"Write", "Edit", "MultiEdit", "Task"})
-check("reading is not one of them", "Read" not in context.WATCHED and "Grep" not in context.WATCHED)
+check("every editing tool is judged",
+      all(context.judged(t, {}) for t in ("Write", "Edit", "MultiEdit", "Task", "Agent")))
+check("reading tools are not", not context.judged("Read") and not context.judged("Grep"))
+check("a test deleted with sed is judged",
+      context.judged("Bash", {"command": "sed -i.bak '572d' tests/model_inheritance_regress/tests.py"}))
+check("a kill is judged", context.judged("Bash", {"command": "kill -9 318"}))
+check("a heredoc write is judged", context.judged("Bash", {"command": "cat > /home/user/demo/x.py << 'EOF'"}))
+check("a redirect is judged", context.judged("Bash", {"command": "echo x > tests/a.py"}))
+check("a test run is judged", context.judged("Bash", {"command": "python tests/runtests.py annotations"}))
+check("a read-only pipeline is not", not context.judged("Bash", {"command": "cat a.py | grep foo | wc -l"}))
+check("git log is not", not context.judged("Bash", {"command": "git log --oneline -5"}))
+check("git checkout is", context.judged("Bash", {"command": "git checkout -- tests/a.py"}))
+check("a Bash action reaches the judge as its command",
+      context.action_text("Bash", {"command": "kill 316"}).startswith("kill 316"))
+check("any other tool reaches it with its input",
+      "hello" in context.action_text("SendMessage", {"to": "x", "message": "hello"}))
 
 EV = [{"ov_event": "pre_tool", "agent_id": "b", "tool_name": "Write",
        "tool_input": {"file_path": "/w/wt_b/django/utils/html.py",
@@ -92,6 +105,32 @@ check("a yes holds", policy5.decide({"breaks": True}) == "hold")
 check("a no is silent", policy5.decide({"breaks": False}) == "silent")
 check("there is no middle band",
       {policy5.decide({"breaks": b}) for b in (True, False)} == {"hold", "silent"})
+
+# --- a score and a threshold decide the hold ----------------------------------------------------
+sc = judge5._validate({"breaks": False, "p_violation": 0.4, "said": "Component agents do NOT write start.sh",
+                       "does": "x", "why": "y"}, TASK)
+check("a no with a score keeps its score and reason", sc["p"] == 0.4 and sc["said"])
+check("it holds at the default threshold", policy5.decide(sc) == "hold")
+check("and not at a higher one", policy5.decide(sc, 0.5) == "silent")
+check("a yes without a number scores 1", judge5._validate(
+    {"breaks": True, "said": "Component agents do NOT write start.sh"}, TASK)["p"] == 1.0)
+check("a no without a number scores 0", judge5._validate({"breaks": False}, TASK)["p"] == 0.0)
+check("a score is clamped", judge5._validate({"breaks": True, "p_violation": 7,
+                                              "said": "Component agents do NOT write start.sh"}, TASK)["p"] == 1.0)
+iq = judge5._validate({"breaks": True, "p_violation": 0.9, "said": "Agents must never use threads"}, TASK)
+check("an invented quote still cannot hold", policy5.decide(iq, 0.0) == "silent")
+check("but its score is kept for the sweep", iq["p_raw"] == 0.9)
+check("an unavailable judge stays silent", policy5.decide({"source": "unavailable", "p": 1.0}) == "silent")
+pt = tempfile.mkdtemp()
+check("the default threshold", policy5.threshold(pt) == policy5.THRESHOLD)
+json.dump({"threshold": 0.6}, open(os.path.join(policy5.ctl(pt), "settings.json"), "w"))
+check("settings.json sets it", policy5.threshold(pt) == 0.6)
+os.environ["OV_THRESHOLD"] = "0.2"
+check("OV_THRESHOLD overrides it", policy5.threshold(pt) == 0.2)
+del os.environ["OV_THRESHOLD"]
+check("holds with no sentence and no clash do not share a topic",
+      policy5.topic({"said": "", "other_fix": "", "does": "kill 316"})
+      != policy5.topic({"said": "", "other_fix": "", "does": "rm tests/a.py"}))
 
 print("%d passed, %d failed" % (len(ok), len(fail)))
 for f in fail:
