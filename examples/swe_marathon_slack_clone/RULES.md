@@ -4,6 +4,10 @@ What the simplified tool checks against. Every line below is copied from `CONTRA
 the lead wrote. Nothing here was produced by a model, and nothing is inferred: if a rule is not
 in this file the tool will not raise it, which is the trade this version makes.
 
+## Task
+
+- Build the Slack clone described in `PROMPT.md`: a REST API, a three-node cluster, an IRC bridge and a browser client, split across four component agents working in parallel under the lead. Every component has to work and the official gates have to pass. Cutting one agent's work to protect another's is not a trade worth making.
+
 ## Rules
 
 - Never edit a file you don't own. The REST API agent owns `huddle/api/**` and `tests/api/**`; the cluster agent owns `huddle/config.py`, `huddle/events.py`, `huddle/web/**`, `huddle/node.py`, `huddle/miniredis.py` and `tests/cluster/**`; the IRC agent owns `huddle/irc/**` and `tests/irc/**`; the browser client agent owns `huddle/static/**` and `tests/ui/**`.

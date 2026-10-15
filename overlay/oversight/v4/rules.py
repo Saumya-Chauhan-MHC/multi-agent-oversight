@@ -48,7 +48,7 @@ def _items(lines):
 def parse(text):
     """RULES.md -> a task model v3's filter and lookups already understand.
 
-    Three sections, all optional. Headings are matched on their first word so "## Rules",
+    Sections are all optional. Headings are matched on their first word so "## Rules",
     "## Hard rules" and "## My rules" are the same section.
     """
     sec = _sections(text)
@@ -60,6 +60,7 @@ def parse(text):
         return []
 
     rules = pick("rule", "hard rule", "constraint")
+    task = pick("task", "what", "goal")
     owners_raw = pick("owner", "file owner", "ownership")
     graded = pick("graded", "protected", "test")
     ifaces = pick("interface", "shared", "contract")
@@ -105,7 +106,7 @@ def parse(text):
             ownership.setdefault(who, []).extend(got)
 
     return dict(requirements=reqs, preferences=prefs, agents={}, decisions=[], state={},
-                ownership=ownership,
+                ownership=ownership, task="\n".join(task),
                 graded_dirs=[d.rstrip("/") + "/" for d in dirs],
                 source=dict(kind="developer-written", file=FILENAME, rules=len(rules),
                             graded=len(graded), interfaces=len(ifaces)))
@@ -129,3 +130,12 @@ def signature(tm):
     """Changes when the rules change, so a cached verdict never outlives the rule behind it."""
     import hashlib
     return hashlib.sha1("|".join(p["rule"] for p in stated(tm)).encode()).hexdigest()[:12]
+
+
+def task_text(tm):
+    """What the developer said the task is, for the places that have to weigh a rule against it.
+
+    The orchestrator has no brief - nobody hands the lead its own instructions - so without this
+    the stand-in developer is asked whether to stop the lead while being shown no work to lose.
+    """
+    return (tm or {}).get("task") or ""

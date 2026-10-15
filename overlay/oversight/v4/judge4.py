@@ -48,8 +48,22 @@ a call, or it binds changes to a helper and this action does not change one, the
 however clearly you can see that a conflict exists. Say nothing and wait for the action that
 actually breaks it.
 
-When you answer yes here, `fix` must tell the agent the CURRENT form of the helper, taken from
-what the other agent actually wrote, so it can correct itself in one step.
+A conflict between two agents has two halves, and only one of them is in front of you. Split the
+repair between the two fields, and do not put the same work in both.
+
+`fix` is what the ACTING agent can do in its own checkout. It is not "undo this". The action in
+front of you is the work that agent was assigned, and telling it to abandon that work does not
+repair anything, it just moves the failure to the other task. Do not offer an alias, a shim, an
+overload or a kept-alive old name as the fix either, and never offer a fix the developer's rules
+forbid. When the acting agent genuinely cannot do anything about this from where it stands, leave
+`fix` empty and say so in `why`.
+
+`other_fix` is the half that can only be done in the OTHER agent's checkout. When you have been
+told the two versions sit in separate checkouts, the acting agent cannot write into theirs, so the
+repair on their side belongs here and nowhere else. Address it to that agent in the second person,
+name the file by the path given for it, and state the exact current form their call has to move to,
+taken from what the acting agent actually wrote. Leave `other_fix` empty only when no other agent
+is involved, or when the acting agent can finish the whole repair itself.
 
 The orchestrator is the lead. A rule addressed to component agents does not bind the lead, and
 a path the table gives to the lead is the lead's to write.
@@ -63,7 +77,25 @@ Return strict JSON, nothing else:
  "said": "<the rule, copied exactly>",
  "does": "<the part of the action that contradicts it, quoted from the action>",
  "why": "<one sentence a developer can check>",
- "fix": "<what to do instead, one sentence>"}"""
+ "fix": "<what the acting agent should do in ITS OWN checkout, one sentence; never \"undo this\", never an alias or shim; \"\" if there is nothing it can do>",
+ "other_fix": "<the repair only the OTHER agent's checkout can take, addressed to them in the second person, or \"\">"}"""
+
+
+def _acting_path(action):
+    first = (action or "").splitlines()[0].strip() if action else ""
+    return first if first.startswith("/") or "/" in first else ""
+
+
+def _separate(a, b):
+    """True when two paths end in the same declared file but sit under different roots."""
+    a, b = (a or "").lstrip("/"), (b or "").lstrip("/")
+    if not a or not b or a == b:
+        return False
+    pa, pb = a.split("/"), b.split("/")
+    tail = 0
+    while tail < min(len(pa), len(pb)) and pa[-1 - tail] == pb[-1 - tail]:
+        tail += 1
+    return tail > 0 and (len(pa) > tail or len(pb) > tail)
 
 
 def _payload(tm, action, trigger, brief, state):
@@ -88,8 +120,19 @@ def _payload(tm, action, trigger, brief, state):
     if others:
         lines += ["", "WHAT OTHER AGENTS HAVE ALREADY DONE TO THIS SAME FILE",
                   "  (they cannot see each other's work; you can)"]
+        # Whether the two versions sit in separate checkouts is not a guess: it is read off the
+        # paths. It decides which half of a repair the acting agent is able to carry out at all,
+        # and so whether there is anything to put in other_fix.
+        mine = _acting_path(action)
+        elsewhere = [ed.get("where") for es in others.values() for ed in es if ed.get("where")]
+        if mine and any(_separate(mine, w) for w in elsewhere):
+            lines.append("  these are separate checkouts of the same file: the agent acting is "
+                         "writing in its own and cannot write into theirs, so any repair that "
+                         "has to happen in their copy is work only they can do")
         for who, edits in list(others.items())[:3]:
             for ed in edits[-2:]:
+                if ed.get("where"):
+                    lines.append("  %s is working in: %s" % (who[:9], ed["where"]))
                 if ed.get("removed"):
                     lines.append("  %s removed: %s" % (who[:9], ed["removed"][:160]))
                 lines.append("  %s wrote:   %s" % (who[:9], ed["added"][:260]))
@@ -106,15 +149,17 @@ def _validate(out, tm):
     if not isinstance(out, dict):
         return None
     if not out.get("breaks"):
-        return dict(breaks=False, rule=None, said="", does="", why="", fix="", source="judge")
+        return dict(breaks=False, rule=None, said="", does="", why="", fix="", other_fix="",
+                    source="judge")
     by_id = {p["id"]: p["rule"] for p in R.stated(tm)}
     rid = out.get("rule")
     if rid not in by_id:
         return dict(breaks=False, rule=None, said="", does="", why="cited a rule that is not in "
-                    "the list: %r" % rid, fix="", source="invalid-citation")
+                    "the list: %r" % rid, fix="", other_fix="", source="invalid-citation")
     return dict(breaks=True, rule=rid, said=by_id[rid],
                 does=str(out.get("does") or "")[:300], why=str(out.get("why") or "")[:300],
-                fix=str(out.get("fix") or "")[:300], source="judge")
+                fix=str(out.get("fix") or "")[:300],
+                other_fix=str(out.get("other_fix") or "")[:300], source="judge")
 
 
 def judge(tm, action, trigger, brief="", agent_state=None, model=MODEL):
@@ -123,10 +168,10 @@ def judge(tm, action, trigger, brief="", agent_state=None, model=MODEL):
                        model, TIMEOUT_S)
     if err or not text:
         return dict(breaks=False, rule=None, said="", does="", why=err or "empty",
-                    fix="", source="unavailable")
+                    fix="", other_fix="", source="unavailable")
     raw = j2._extract_json(text)
     out = _validate(raw, tm) if raw else None
     if out is None:
         return dict(breaks=False, rule=None, said="", does="", why="unparseable", fix="",
-                    source="unavailable")
+                    other_fix="", source="unavailable")
     return out

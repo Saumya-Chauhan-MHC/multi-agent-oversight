@@ -71,6 +71,10 @@ def others_on(events, pattern, agent_id):
     are different files on disk and the same file in the project. v3's `same_file` says they are
     unrelated, so the dependency map never links them and the interface trigger never fires.
 
+    `where` keeps the absolute path as well as the declared one. The declared path is what links
+    the two agents; the absolute path is the only thing that says which checkout the repair has to
+    land in, and a repair in the wrong checkout is not picked up by the merge.
+
     This is the one thing the oversight layer has that neither agent has. The agents are isolated
     from each other on purpose; the tool sees both. Without this the judge is asked whether an
     action is stale while being shown only that action.
@@ -91,7 +95,8 @@ def others_on(events, pattern, agent_id):
         body = str(ti.get("new_string") or ti.get("content") or "")
         prev = str(ti.get("old_string") or "")
         out.setdefault(who, []).append(dict(removed=_squeeze(prev, 500),
-                                            added=_squeeze(body, 1600)))
+                                            added=_squeeze(body, 1600),
+                                            where=_norm(str(ti.get("file_path") or ""))))
     return out
 
 
@@ -112,4 +117,27 @@ def check(tm, events, tool_name, tool_input, agent_id):
     return f3.check(tm, events, tool_name, tool_input, agent_id)
 
 
-action_text = f3.action_text
+def action_text(tool_name, tool_input):
+    """v3's version, except that an edit is rendered as a labelled before and after.
+
+    v3 joins the parts with spaces, so an Edit reaches the judge as
+    `path - def strip_tags(v): + def strip_tags_v2(v):` on one line. Twice in testing the judge
+    read that as an addition rather than a replacement and reported a rename as "keeps both forms
+    defined alongside each other", which is the opposite of what happened. The field it then fills
+    is the one the agent is told to act on, so a misread diff becomes a wrong instruction.
+
+    v3's own function is left alone on purpose: it is what every earlier measurement was taken
+    with, and changing it would make those numbers incomparable.
+    """
+    ti = tool_input or {}
+    if tool_name in ("Edit", "MultiEdit"):
+        pairs = [(ti.get("old_string"), ti.get("new_string"))]
+        pairs += [(e.get("old_string"), e.get("new_string")) for e in (ti.get("edits") or [])]
+        out = [str(ti.get("file_path") or "")]
+        for old, new in pairs:
+            if not (old or new):
+                continue
+            out += ["", "REPLACED THIS:", f3._salient(old, f3.BUDGET // 2) or "(nothing)",
+                    "WITH THIS:", f3._salient(new, f3.BUDGET // 2) or "(nothing, it was deleted)"]
+        return "\n".join(out)
+    return f3.action_text(tool_name, tool_input)

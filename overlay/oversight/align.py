@@ -319,17 +319,21 @@ def inbox_key(agent):
     return re.sub(r"[^\w.-]", "_", str(agent))
 
 
-def send_to_agent(proj, agent, text):
+def send_to_agent(proj, agent, text, kind="human"):
     """A note delivered to one agent on its next tool call (inbox.py does the injecting).
 
     Every message carries an id: inbox.py records delivered ids, and without one it would re-inject
     the same note on every later tool call.
+
+    `kind` is who the note is from, because inbox.py tells the agent that, and it has to be true.
+    "human" is the developer speaking. "relay" is the oversight layer passing on a fact about
+    another agent's checkout, which no human has seen or endorsed.
     """
     d = os.path.join(ctl(proj), "inbox")
     os.makedirs(d, exist_ok=True)
     mid = "n%d" % now_ms()
     with open(os.path.join(d, "%s.jsonl" % inbox_key(agent)), "a") as f:
-        f.write(json.dumps(dict(id=mid, ts=now_ms(), text=text)) + "\n")
+        f.write(json.dumps(dict(id=mid, ts=now_ms(), text=text, kind=kind)) + "\n")
     return mid
 
 

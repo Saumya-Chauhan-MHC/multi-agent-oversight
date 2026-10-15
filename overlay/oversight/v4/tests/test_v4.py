@@ -87,6 +87,62 @@ check("changing a rule changes the signature",
 # no rules written means the tool does nothing at all
 check("an empty rule file disables the tool", not rules.stated(rules.parse("# Rules\n")))
 
+# --- the relay: the half of a repair that only the other agent's checkout can take -------------
+import tempfile, json as _json
+from oversight.v4 import relay
+
+STARTED = [{"ov_event": "subagent_start", "agent_id": "b"}]
+STOPPED = STARTED + [{"ov_event": "subagent_stop", "agent_id": "b"}]
+
+check("a started agent is running", relay.running(STARTED, "b"))
+check("a stopped agent is not", not relay.running(STOPPED, "b"))
+check("a stop with no start is not believed",
+      not relay.running([{"ov_event": "subagent_stop", "agent_id": "b"}], "b"))
+
+TRIG = dict(path="B", reason="owned_file", others={"b": [{"where": "d/wt_b/django/utils/html.py",
+                                                          "added": "strip_tags(html)"}]})
+
+
+def _relay(verdict, trigger, events):
+    d = tempfile.mkdtemp()
+    os.makedirs(os.path.join(d, "oversight"), exist_ok=True)
+    with open(os.path.join(d, "oversight", "events.jsonl"), "w") as f:
+        for e in events:
+            f.write(_json.dumps(e) + "\n")
+    to = relay.send(d, verdict, trigger, "a", "r1")
+    box = os.path.join(d, "oversight", "control", "inbox")
+    files = sorted(os.listdir(box)) if os.path.isdir(box) else []
+    body = ""
+    if files:
+        body = open(os.path.join(box, files[0])).read()
+    return to, files, body
+
+
+to, files, body = _relay(dict(other_fix="call strip_tags_v2(html) instead"), TRIG, STARTED)
+check("the running other agent is the recipient", to == ["b"])
+check("the note lands in that agent's inbox, not the orchestrator's", files == ["b.jsonl"])
+check("the note carries the judge's own sentence", "strip_tags_v2(html)" in body)
+check("the note names the checkout the repair belongs in", "d/wt_b/django/utils/html.py" in body)
+check("the note is tagged as a relay, not as a human", '"kind": "relay"' in body)
+
+to, files, _ = _relay(dict(other_fix="call strip_tags_v2(html) instead"), TRIG, STOPPED)
+check("a finished agent falls back to the orchestrator", to == ["orchestrator"])
+check("the fallback lands in the orchestrator's mailbox", files == ["main.jsonl"])
+
+check("nothing is relayed when the judge left other_fix empty",
+      _relay(dict(other_fix=""), TRIG, STARTED)[0] == [])
+check("nothing is relayed when no other agent is involved",
+      _relay(dict(other_fix="do the thing"), dict(path="B", others={}), STARTED)[0] == [])
+
+# the judge contract has to carry the field, or the relay is always empty
+from oversight.v4 import judge4
+check("a no-verdict still has the field",
+      "other_fix" in judge4._validate({"breaks": False}, tm))
+check("other_fix survives validation of a yes",
+      judge4._validate({"breaks": True, "rule": "H1", "said": "x", "does": "y", "why": "z",
+                        "fix": "f", "other_fix": "o"}, tm).get("other_fix") == "o")
+check("the judge is asked for it", "other_fix" in judge4.SYSTEM)
+
 print("%d passed, %d failed" % (len(ok), len(fail)))
 for f in fail:
     print("  FAILED: %s" % f)

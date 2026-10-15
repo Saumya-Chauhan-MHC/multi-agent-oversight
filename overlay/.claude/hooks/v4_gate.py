@@ -29,7 +29,7 @@ PROJ = os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
 sys.path.insert(0, PROJ)
 sys.path.insert(0, os.path.join(PROJ, "oversight"))
 try:
-    from oversight.v4 import rules, policy4, judge4
+    from oversight.v4 import rules, policy4, judge4, relay
     from oversight.v4 import filter4 as filt
     from oversight import align
 except Exception:
@@ -88,12 +88,17 @@ flag = dict(rid=rid, ts=policy4.now(), agent=who, tool=tool, action=action[:300]
             others_n=sum(len(v) for v in (trigger.get("others") or {}).values()),
             band=band, judge_s=judge_s,
             **{k: verdict.get(k) for k in ("breaks", "rule", "said", "does", "why", "fix",
-                                           "source")})
+                                           "other_fix", "source")})
 policy4.cache_put(PROJ, key, dict(band=band, breaks=verdict.get("breaks")))
 align.append_event(PROJ, dict(ov_event="v4_judgement", **flag))
 
 if band != "hold":
     sys.exit(0)
+
+
+def _lower1(t):
+    """The judge writes other_fix as its own sentence; it gets spliced into the middle of one."""
+    return (t[:1].lower() + t[1:]) if t else t
 
 
 def _notice(flag):
@@ -103,7 +108,7 @@ def _notice(flag):
         '  you wrote (%s): "%s"' % (flag.get("rule"), flag.get("said")),
         "  this does:    %s" % (flag.get("does") or "?"),
         "  why:          %s" % (flag.get("why") or ""),
-        "  instead:      %s" % (flag.get("fix") or ""),
+        "  instead:      %s" % (flag.get("other_fix") or flag.get("fix") or ""),
     ])
 
 
@@ -116,12 +121,17 @@ if prior is not None:
             "hookEventName": "PreToolUse", "permissionDecision": "deny",
             "permissionDecisionReason": "the developer already said no to this rule being broken: "
                                         + (prior.get("note") or flag.get("said") or "")}}))
+    else:
+        relay.send(PROJ, verdict, trigger, who, rid)
     sys.exit(0)
 
 SIM = os.environ.get("OV_SIMUSER") == "1"
 if SIM:
     from oversight.v4 import simuser4
-    decision, why = simuser4.ask(flag)
+    # Shown the task and the interruption count, not just the rule. Without them, stopping an
+    # agent looks costless to the stand-in, and it is not.
+    decision, why = simuser4.ask(flag, task=(brief or rules.task_text(tm)),
+                                 asked_n=len(policy4.asked(PROJ) or []))
     policy4.record_answer(PROJ, flag["rule"], decision, why)
     align.append_event(PROJ, dict(ov_event="v4_user", rid=rid, decision=decision, reason=why,
                                   rule=flag.get("rule"), trigger=flag.get("trigger"),
@@ -132,19 +142,40 @@ if SIM:
                               "hookEventName": "PreToolUse", "permissionDecision": "deny",
                               "permissionDecisionReason": (why or "the developer stopped this")
                                                           + "  " + (flag.get("fix") or "")}}))
-    elif flag.get("fix"):
+        sys.exit(0)
+
+    # Not blocked, so the action goes ahead and the conflict is about to be real in the merged
+    # tree. Two things have to happen, and until now the hook could only do the first: tell this
+    # agent the half it can fix itself, and tell the other agent the half only its checkout can
+    # take. Without the second, the repair lands in one worktree and the merge still breaks.
+    to = relay.send(PROJ, verdict, trigger, who, rid)
+    if flag.get("fix") or to:
         # Allow, carrying the correction. Denying was the only answer this hook could give, and
         # on a miscoordination it is the wrong one: the agent's own work is fine, what it is
         # missing is a fact about another agent it cannot see. Denying makes it retry the same
-        # write, get denied again, and eventually abandon the work. Four STALE treatment arms
+        # write, get denied again, and eventually abandon the work. Five STALE treatment arms
         # cut interference in half and never got above 1 of 12 on both-tasks-done, because
         # every success on one task was paid for by killing the other.
-        print(json.dumps({"systemMessage": _notice(flag),
+        note = _notice(flag)
+        if to:
+            note += "\n  relayed to:   %s" % ", ".join(to)
+        go = "Go ahead with this"
+        if to:
+            # Once the repair has been routed to the checkout that needs it, the acting agent is
+            # not asked to do anything about it. Its own `fix` is dropped here on purpose: with
+            # the other half unreachable, the judge's advice to the actor collapses into "undo
+            # your change" or "keep the old name alive as well", and both of those pay for one
+            # task with the other. That trade is what held both-tasks-done at 1 of 12.
+            go += (". Do not undo it and do not leave a second copy of the old form behind. The "
+                   "other agent working on this file has been told separately, in its own "
+                   "checkout, to " + _lower1((verdict.get("other_fix") or "").rstrip("."))
+                   + ", so you do not need to reach into their checkout and should not try.")
+        elif flag.get("fix"):
+            go += ", and you also need to: " + flag["fix"]
+        print(json.dumps({"systemMessage": note,
                           "hookSpecificOutput": {
                               "hookEventName": "PreToolUse", "permissionDecision": "allow",
-                              "permissionDecisionReason":
-                                  "Go ahead with this, and you also need to: " + flag["fix"]
-                                  + (("  " + why) if why else "")}}))
+                              "permissionDecisionReason": go + (("  " + why) if why else "")}}))
     sys.exit(0)
 
 reason = _notice(flag)
