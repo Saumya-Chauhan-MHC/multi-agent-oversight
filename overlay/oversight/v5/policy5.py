@@ -41,8 +41,14 @@ def topic(verdict):
     return "x:" + hashlib.sha1(((verdict or {}).get("other_fix") or "")[:80].encode()).hexdigest()[:10]
 
 
-def cache_key(action_text, task_sig, agent=""):
-    raw = "%s|%s|%s" % (task_sig, agent, action_text)
+def cache_key(action_text, task_sig, agent="", others_sig="none"):
+    """What makes two decisions the same decision.
+
+    `others_sig` is part of it because the answer depends on what other agents have done to the
+    file, not only on the action and the task text. Leaving it out let the cache suppress a hold
+    that had become true since the first time the same action was judged.
+    """
+    raw = "%s|%s|%s|%s" % (task_sig, agent, others_sig, action_text)
     return hashlib.sha1(raw.encode()).hexdigest()
 
 

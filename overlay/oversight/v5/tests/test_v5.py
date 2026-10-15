@@ -52,6 +52,42 @@ check("a no always carries both fix fields",
 check("every repository-changing tool is watched",
       set(context.WATCHED) >= {"Write", "Edit", "MultiEdit", "Task"})
 check("reading is not one of them", "Read" not in context.WATCHED and "Grep" not in context.WATCHED)
+# a shell command changes the repository as surely as an edit does, and on a resource conflict it
+# is the only way the damage is ever done
+check("a shell command is watched too", "Bash" in context.WATCHED)
+
+# watching Bash is only half of it: the command has to be connected to the files it touches, or
+# it reaches the judge with no cross-agent context and is judged on its text alone
+check("a path is read out of a shell command",
+      context.targets("Bash", {"command": "rm -f /w/wt_b/django/utils/html.py && echo gone"})
+      == ["w/wt_b/django/utils/html.py"])
+check("an in-place edit by sed is seen",
+      "huddle/api/routes.py" in context.targets("Bash", {"command": "sed -i 's/a/b/' huddle/api/routes.py"}))
+check("a command touching no file yields none",
+      context.targets("Bash", {"command": "ls -la"}) == [])
+check("an edit still names its own file",
+      context.targets("Edit", {"file_path": "/w/a/m.py"}) == ["w/a/m.py"])
+check("a deleted shared file links to the agent that wrote it",
+      list(context.others_on(
+          [{"ov_event": "pre_tool", "agent_id": "b", "tool_name": "Write",
+            "tool_input": {"file_path": "/w/wt_b/django/utils/html.py", "content": "x"}}],
+          context.targets("Bash", {"command": "rm -f /w/wt_b/django/utils/html.py"})[0],
+          "a")) == ["b"])
+
+# --- the judged-cache must not outlive the context that justified it -------------------------
+E0 = []
+E1 = [{"ov_event": "pre_tool", "agent_id": "a", "tool_name": "Edit",
+       "tool_input": {"file_path": "/w/wt_a/django/utils/html.py", "old_string": "def f():",
+                      "new_string": "def f_v2():"}}]
+MINE = "/w/wt_b/django/utils/html.py"
+before = context.others_sig(context.others_on(E0, MINE, "b"))
+after = context.others_sig(context.others_on(E1, MINE, "b"))
+check("no other agent yet gives an empty signature", before == "none")
+check("another agent's write changes the signature", after != before)
+check("the same action is a different decision once someone else has touched the file",
+      policy5.cache_key("act", "sig", "b", before) != policy5.cache_key("act", "sig", "b", after))
+check("and the same decision when nothing has changed",
+      policy5.cache_key("act", "sig", "b", after) == policy5.cache_key("act", "sig", "b", after))
 
 EV = [{"ov_event": "pre_tool", "agent_id": "b", "tool_name": "Write",
        "tool_input": {"file_path": "/w/wt_b/django/utils/html.py",
@@ -61,6 +97,19 @@ check("a write in another checkout is linked to this one", list(o) == ["b"])
 check("and its own path is kept, for routing the repair",
       o["b"][0]["where"].endswith("wt_b/django/utils/html.py"))
 check("an agent is not shown its own writes", context.others_on(EV, "/w/wt_b/django/utils/html.py", "b") == {})
+# two agents owning parallel trees in ONE checkout are not two views of one file. SWE-Marathon
+# has four such agents, so this is the difference between real conflicts and invented ones.
+check("sibling directories in one repo are not the same file",
+      not context.same_declared_file("huddle/api/routes.py", "huddle/web/routes.py"))
+check("nor are parallel test trees",
+      not context.same_declared_file("tests/api/conftest.py", "tests/irc/conftest.py"))
+check("nor parallel package inits",
+      not context.same_declared_file("huddle/api/__init__.py", "huddle/irc/__init__.py"))
+check("but two worktrees of one repo are",
+      context.same_declared_file("d/wt_a/django/utils/html.py", "d/wt_b/django/utils/html.py"))
+check("and only for the same file within them",
+      not context.same_declared_file("d/wt_a/django/utils/html.py", "d/wt_b/django/utils/http.py"))
+
 check("separate checkouts are detected",
       context.separate_checkouts("/w/wt_a/django/utils/html.py", "/w/wt_b/django/utils/html.py"))
 check("the same path is not two checkouts",

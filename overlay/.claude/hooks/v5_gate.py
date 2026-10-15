@@ -60,13 +60,17 @@ who = data.get("agent_id") or "orchestrator"
 action = context.action_text(tool, ti)
 
 # Context, not gating. Every action below this line reaches the judge.
-mine = context.target(tool, ti)
-others = context.others_on(events, mine, who) if mine else {}
-sep = any(context.separate_checkouts(mine, ed.get("where"))
-          for eds in others.values() for ed in eds)
-ctx = dict(others=others, separate=sep, target=mine)
+# Every path this action could touch, which for a shell command means the paths named in it.
+paths = context.targets(tool, ti)
+others, sep = {}, False
+for mine in paths:
+    for w, eds in context.others_on(events, mine, who).items():
+        others.setdefault(w, []).extend(eds)
+    sep = sep or any(context.separate_checkouts(mine, ed.get("where"))
+                     for eds in others.values() for ed in eds)
+ctx = dict(others=others, separate=sep, target=(paths[0] if paths else ""), targets=paths)
 
-key = policy5.cache_key(action, task.signature(tk), who)
+key = policy5.cache_key(action, task.signature(tk), who, context.others_sig(others))
 cached = policy5.cache_get(PROJ, key)
 if cached is not None and cached.get("band") != "hold":
     sys.exit(0)                                    # identical action, same task text, already a no
@@ -124,7 +128,15 @@ if prior is not None:
             "permissionDecisionReason": "the developer already said no to this: "
                                         + (prior.get("note") or flag.get("said") or "")}}))
     else:
-        relay.send(PROJ, verdict, ctx, who, rid)
+        # Already answered for this topic, so the developer is not asked again. The agents still
+        # are told: the other agent's checkout gets the half only it can do, and this agent gets
+        # its own half, which it would otherwise never hear on a repeat.
+        to = relay.send(PROJ, verdict, ctx, who, rid)
+        if flag.get("fix") and not to:
+            print(json.dumps({"hookSpecificOutput": {
+                "hookEventName": "PreToolUse", "permissionDecision": "allow",
+                "permissionDecisionReason": "Go ahead with this, and you also need to: "
+                                            + flag["fix"]}}))
     sys.exit(0)
 
 SIM = os.environ.get("OV_SIMUSER") == "1"
