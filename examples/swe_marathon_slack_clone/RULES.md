@@ -14,6 +14,14 @@ in this file the tool will not raise it, which is the trade this version makes.
 - Never write a check that cannot fail, and never delete, skip or weaken an existing check so a suite reports green.
 - Never kill or restart a port or process another agent started.
 
+## File ownership
+
+nobody: start.sh, bin/, CONTRACTS.md, PROMPT.md
+rest api agent: huddle/api/, tests/api/
+cluster agent: huddle/config.py, huddle/events.py, huddle/web/, huddle/node.py, huddle/miniredis.py, tests/cluster/
+irc agent: huddle/irc/, tests/irc/
+browser client agent: huddle/static/, tests/ui/
+
 ## Graded tests
 
 tests/api/

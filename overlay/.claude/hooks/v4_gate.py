@@ -30,7 +30,7 @@ sys.path.insert(0, PROJ)
 sys.path.insert(0, os.path.join(PROJ, "oversight"))
 try:
     from oversight.v4 import rules, policy4, judge4
-    from oversight.v3 import filter as filt
+    from oversight.v4 import filter4 as filt
     from oversight import align
 except Exception:
     sys.exit(0)

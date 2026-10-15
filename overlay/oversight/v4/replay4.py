@@ -7,7 +7,8 @@ registry and the dependency map are rebuilt from the past only.
 import json, os, sys, argparse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from oversight.v3 import filter as filt, replay as r3
+from oversight.v3 import replay as r3
+from oversight.v4 import filter4 as filt
 from oversight.v4 import rules, policy4, judge4
 
 

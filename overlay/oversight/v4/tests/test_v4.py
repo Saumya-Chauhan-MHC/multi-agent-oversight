@@ -3,7 +3,7 @@
 import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))))
-from oversight.v4 import rules, policy4, judge4
+from oversight.v4 import rules, policy4, judge4, filter4
 from oversight.v3 import taskmodel as tmod
 
 RULES = """## Rules
@@ -14,6 +14,10 @@ tests/api/
 tests/unit/test_core.py
 ## Shared interfaces
 lib/http.py
+
+## File ownership
+nobody: start.sh, bin/
+api agent: src/api/, tests/api/
 """
 ok, fail = [], []
 
@@ -60,6 +64,21 @@ with tempfile.TemporaryDirectory() as d:
     policy4.record_answer(d, "H1", "block", "no")
     check("an answer is remembered", policy4.answer_for(d, "H1")["decision"] == "block")
     check("another rule is still unanswered", policy4.answer_for(d, "H2") is None)
+
+# every rule shape RULES.md permits has a lookup behind it. Arm F found the gap: a rule saying
+# "do not write start.sh" was unenforceable because no lookup matched that path.
+check("a forbidden path is caught structurally",
+      (filter4.check(tm, [], "Write", {"file_path": "/p/start.sh", "content": "x"}, "a")
+       or {}).get("reason") == "owned_file")
+check("an owned path names its owner",
+      (filter4.check(tm, [], "Write", {"file_path": "/p/src/api/core.py", "content": "x"}, "a")
+       or {}).get("owner") == "api agent")
+check("an unowned path is not claimed",
+      (filter4.check(tm, [], "Write", {"file_path": "/p/README.md", "content": "x"}, "a")
+       or {}).get("reason") != "owned_file")
+check("reading an owned file is not a write",
+      (filter4.check(tm, [], "Read", {"file_path": "/p/start.sh"}, "a") or {}).get("reason")
+      != "owned_file")
 
 # the signature binds a cached verdict to the rules that produced it
 check("changing a rule changes the signature",

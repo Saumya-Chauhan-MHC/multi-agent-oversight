@@ -60,6 +60,7 @@ def parse(text):
         return []
 
     rules = pick("rule", "hard rule", "constraint")
+    owners_raw = pick("owner", "file owner", "ownership")
     graded = pick("graded", "protected", "test")
     ifaces = pick("interface", "shared", "contract")
 
@@ -91,7 +92,20 @@ def parse(text):
                           when="always", source="developer", priority="hard",
                           quote="", serves=[], metrics=["tests"], files=ifaces))
 
+    # "<owner>: path, path, path" per line. The owner name is whatever the developer calls that
+    # agent in the brief, because the judge resolves it against the brief, not against an id.
+    ownership = {}
+    for line in owners_raw:
+        if ":" not in line:
+            continue
+        who, paths = line.split(":", 1)
+        who = who.strip().strip("`*_").lower()
+        got = [p.strip().strip("`") for p in paths.replace("|", ",").split(",") if p.strip()]
+        if who and got:
+            ownership.setdefault(who, []).extend(got)
+
     return dict(requirements=reqs, preferences=prefs, agents={}, decisions=[], state={},
+                ownership=ownership,
                 graded_dirs=[d.rstrip("/") + "/" for d in dirs],
                 source=dict(kind="developer-written", file=FILENAME, rules=len(rules),
                             graded=len(graded), interfaces=len(ifaces)))
