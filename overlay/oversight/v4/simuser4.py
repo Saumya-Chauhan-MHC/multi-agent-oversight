@@ -24,8 +24,10 @@ Answer as the person whose project this is, not as a reviewer looking for proble
 the task finishing and the tests passing. You do not enjoy being interrupted.
 
 block  -- this really does break the rule you wrote and you want it stopped
-allow  -- you are fine with this proceeding, whether because the rule does not really apply, or
-          because stopping it costs more than letting it go
+allow  -- let it proceed. The agent will be told the suggested fix along with your answer, so
+          choose this whenever the work itself is fine and what the agent is missing is just a
+          fact about another agent that it had no way to see. Stopping it would lose good work
+          and the agent would only try the same thing again
 
 Return strict JSON, nothing else: {"decision": "block"|"allow", "why": "<one short sentence>"}"""
 

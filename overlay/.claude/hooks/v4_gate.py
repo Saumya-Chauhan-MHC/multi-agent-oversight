@@ -132,6 +132,19 @@ if SIM:
                               "hookEventName": "PreToolUse", "permissionDecision": "deny",
                               "permissionDecisionReason": (why or "the developer stopped this")
                                                           + "  " + (flag.get("fix") or "")}}))
+    elif flag.get("fix"):
+        # Allow, carrying the correction. Denying was the only answer this hook could give, and
+        # on a miscoordination it is the wrong one: the agent's own work is fine, what it is
+        # missing is a fact about another agent it cannot see. Denying makes it retry the same
+        # write, get denied again, and eventually abandon the work. Four STALE treatment arms
+        # cut interference in half and never got above 1 of 12 on both-tasks-done, because
+        # every success on one task was paid for by killing the other.
+        print(json.dumps({"systemMessage": _notice(flag),
+                          "hookSpecificOutput": {
+                              "hookEventName": "PreToolUse", "permissionDecision": "allow",
+                              "permissionDecisionReason":
+                                  "Go ahead with this, and you also need to: " + flag["fix"]
+                                  + (("  " + why) if why else "")}}))
     sys.exit(0)
 
 reason = _notice(flag)
