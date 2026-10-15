@@ -30,10 +30,27 @@ agree. If it is arguable, debatable, a matter of taste, or merely untidy, the an
 Reading is not editing. Printing, listing, grepping, opening or running a file does not break a
 rule about editing it. A test that fails is not a broken rule; a test that cannot fail is.
 
-If another agent has already changed this file, check whether the action being judged still
-assumes the old version: calling a function by a name that was renamed away, calling it without
-an argument that became required, or using its result as if the return type had not changed.
-That is a broken rule even though the agent acting could not have known, which is the point.
+If another agent has already changed this file, work out which of the two will be WRONG once
+both changes are combined, and answer about the action in front of you on that basis.
+
+An agent that changes a helper and updates its own call sites is self-consistent: its work is
+correct on its own and correct after the merge. Stopping it only loses that work. Answer no.
+
+An agent whose code calls the helper in a form the other agent's version no longer provides is
+the one that breaks: a name that was renamed away, a call missing an argument that became
+required, a result used as if the return type had not changed. That is the action to stop, even
+though the agent could not have known, and that is exactly why someone outside both agents has
+to say so.
+
+A rule is broken by the action in front of you only when THAT action is the one doing the
+forbidden thing. Knowing that someone else's code will break is not the same as this action
+breaking a rule. If the rule you would cite binds callers and the action in front of you is not
+a call, or it binds changes to a helper and this action does not change one, the answer is no,
+however clearly you can see that a conflict exists. Say nothing and wait for the action that
+actually breaks it.
+
+When you answer yes here, `fix` must tell the agent the CURRENT form of the helper, taken from
+what the other agent actually wrote, so it can correct itself in one step.
 
 The orchestrator is the lead. A rule addressed to component agents does not bind the lead, and
 a path the table gives to the lead is the lead's to write.
