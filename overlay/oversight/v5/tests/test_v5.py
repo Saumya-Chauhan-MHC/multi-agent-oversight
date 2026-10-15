@@ -56,6 +56,26 @@ check("reading is not one of them", "Read" not in context.WATCHED and "Grep" not
 # is the only way the damage is ever done
 check("a shell command is watched too", "Bash" in context.WATCHED)
 
+# skipping all of Bash made `rm -f <another agent's file>` invisible; judging all of it bought a
+# model call on every `ls`. The line is whether the command can change anything.
+for cmd in ("ls -la", "cat x.py", "git status", "grep -rn foo src/", "ls | wc -l", "pwd"):
+    check("read-only command is skipped: %s" % cmd,
+          not context.worth_judging("Bash", {"command": cmd}))
+for cmd in ("rm -f /w/wt_b/m.py", "sed -i 's/a/b/' x.py", "mv a.py b.py", "kill -9 1234",
+            "git checkout -- .", "git reset --hard", "pytest tests/ -q"):
+    check("mutating command is judged: %s" % cmd,
+          context.worth_judging("Bash", {"command": cmd}))
+check("one mutating segment makes the whole command judged",
+      context.worth_judging("Bash", {"command": "ls && rm -rf build"}))
+check("a redirect writes a file however harmless the command looks",
+      context.worth_judging("Bash", {"command": "echo hi > start.sh"}))
+check("a command substitution could hide anything",
+      context.worth_judging("Bash", {"command": "cat $(ls | head -1)"}))
+check("an unrecognised command is judged, not assumed safe",
+      context.worth_judging("Bash", {"command": "frobnicate --all"}))
+check("an edit is always judged", context.worth_judging("Edit", {"file_path": "x.py"}))
+check("a read is never judged", not context.worth_judging("Read", {"file_path": "x.py"}))
+
 # watching Bash is only half of it: the command has to be connected to the files it touches, or
 # it reaches the judge with no cross-agent context and is judged on its text alone
 check("a path is read out of a shell command",

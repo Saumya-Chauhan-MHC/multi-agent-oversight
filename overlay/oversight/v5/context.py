@@ -72,6 +72,61 @@ def action_text(tool_name, tool_input):
 PATHISH = re.compile(r"[\w./~-]*/[\w./-]+\.\w+|\b[\w-]+\.(?:py|js|ts|go|rb|java|json|ya?ml|sh|md|toml|cfg|ini)\b")
 
 
+# Commands that cannot change the repository. A command is skipped only when EVERY segment of it
+# is on this list, so `ls` is skipped and `ls && rm x` is not. Anything unrecognised is judged:
+# the list is an allowlist, because the cost of wrongly skipping is blindness and the cost of
+# wrongly judging is one model call.
+READ_ONLY = {
+    "ls", "cat", "head", "tail", "less", "more", "wc", "file", "stat", "du", "df",
+    "grep", "egrep", "fgrep", "rg", "ag", "find", "fd", "which", "whereis", "type",
+    "pwd", "cd", "echo", "printf", "date", "whoami", "hostname", "env", "printenv",
+    "diff", "cmp", "sort", "uniq", "cut", "tr", "jq", "basename", "dirname", "realpath",
+    "ps", "top", "uptime", "sleep", "true", "false", "test",
+}
+# git is only read-only for some subcommands. `git checkout` and `git reset` rewrite the tree.
+GIT_READ_ONLY = {"status", "log", "diff", "show", "branch", "remote", "ls-files", "rev-parse",
+                 "describe", "blame", "cat-file", "config"}
+SPLIT = re.compile(r"\|\||&&|[;|&\n]")
+
+
+def read_only_command(cmd):
+    """True when every segment of this command is a known read-only one.
+
+    v5's first version skipped Bash entirely, which made `rm -f <another agent's file>` invisible.
+    Watching all of Bash fixed that and bought a judge call on every `ls`. Neither is right: what
+    matters is whether the command can change anything.
+
+    Unparseable, unrecognised, substituted or redirected commands are all judged. A redirect
+    writes a file however read-only the command in front of it looks, and `$(...)` can hide
+    anything.
+    """
+    c = (cmd or "").strip()
+    if not c or ">" in c or "$(" in c or "`" in c:
+        return False
+    for seg in SPLIT.split(c):
+        words = seg.split()
+        if not words:
+            continue
+        head = os.path.basename(words[0])
+        if head == "git":
+            rest = [w for w in words[1:] if not w.startswith("-")]
+            if not rest or rest[0] not in GIT_READ_ONLY:
+                return False
+            continue
+        if head not in READ_ONLY:
+            return False
+    return True
+
+
+def worth_judging(tool_name, tool_input):
+    """The tool-type gate. A read breaks nothing; a read-only shell command breaks nothing either."""
+    if tool_name not in WATCHED:
+        return False
+    if tool_name == "Bash":
+        return not read_only_command(str((tool_input or {}).get("command") or ""))
+    return True
+
+
 def targets(tool_name, tool_input):
     """Every file this action could touch.
 

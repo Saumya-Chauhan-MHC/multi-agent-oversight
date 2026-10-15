@@ -74,8 +74,11 @@ confidence field to return.
 
 1. **An agent is about to act.** `PreToolUse` fires with the tool name and input.
 
-2. **Is this an act that can change anything?** `Write`, `Edit`, `MultiEdit`, `Task`, `Bash`. A
-   `Read` or `Grep` exits here.
+2. **Is this an act that can change anything?** `Write`, `Edit`, `MultiEdit`, `Task`, and a
+   `Bash` command that is not read-only. A `Read`, a `Grep`, or `ls`, `cat`, `git status`
+   and the like exit here. The read-only list is an allowlist checked segment by segment,
+   so `ls` is skipped and `ls && rm -rf build` is not, and a redirect or a `$(...)` is
+   always judged however harmless the command in front of it looks.
 
 3. **Read the task description** from the task's own file: `PROMPT.md`, falling back through
    `TASK.md` / `CONTRACTS.md` / `SPEC.md` / `README.md`. No `RULES.md`. If there is no task text,

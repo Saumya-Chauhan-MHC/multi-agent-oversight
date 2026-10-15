@@ -46,8 +46,9 @@ except Exception:
     sys.exit(0)
 
 tool, ti = data.get("tool_name"), (data.get("tool_input") or {})
-if tool not in context.WATCHED:
-    sys.exit(0)                                    # reading breaks nothing; this is not a filter
+if not context.worth_judging(tool, ti):
+    sys.exit(0)                                    # reading breaks nothing, and neither does a
+                                                   # read-only shell command. This is not a filter
                                                    # on judgement, it is the set of acts that can
                                                    # change the repository at all
 
