@@ -139,3 +139,66 @@ def task_text(tm):
     the stand-in developer is asked whether to stop the lead while being shown no work to lose.
     """
     return (tm or {}).get("task") or ""
+
+
+# --- reading the task's own document ---------------------------------------------------------
+#
+# A reviewer put it plainly: the tool was handed a user-written RULES.md instead of the task
+# description, which is not the baseline. They are right, and the SWE-Marathon example proves it.
+# Its RULES.md is a hand-transcription of CONTRACTS.md, a document the task already ships: the
+# ownership bullets restate a markdown table line for line. Asking for that twice is work the
+# developer should not do, and it is work they can get wrong. I did: `nobody: start.sh, bin/`
+# where CONTRACTS.md gives both to the lead, which produced a confident and completely wrong
+# block and cost a whole arm.
+#
+# So the task document is read directly. No model is involved, which is the point - the extractor
+# was removed because an LLM reading a brief needed provenance checks, quote checks and a
+# consensus vote before anything it produced could be trusted. A markdown table needs none of
+# that: it either parses or it does not, and the developer can see what was read.
+
+TABLE_ROW = re.compile(r"^\s*\|(.+)\|\s*$")
+
+
+def _tables_under(text, *heading_words):
+    """Rows of every markdown table under a heading mentioning one of these words."""
+    out, live = [], False
+    for line in (text or "").splitlines():
+        if line.startswith("#"):
+            low = line.lower()
+            live = any(w in low for w in heading_words)
+            continue
+        if not live:
+            continue
+        m = TABLE_ROW.match(line)
+        if not m:
+            continue
+        cells = [c.strip() for c in m.group(1).split("|")]
+        if len(cells) < 2 or set("".join(cells)) <= set("-: "):
+            continue                                  # separator row, or a header underline
+        out.append(cells)
+    return out
+
+
+def from_contract(text):
+    """A task document -> the same shape parse() returns, for the parts that are unambiguous.
+
+    Only the ownership table is read. Prose is left alone on purpose: "do NOT write start.sh"
+    sitting inside a heading is exactly the kind of line an extractor would have to interpret,
+    and interpreting it is the thing this version does not do.
+    """
+    ownership = {}
+    for cells in _tables_under(text, "ownership", "owner", "files"):
+        who = cells[0].strip().strip("`*_").lower()
+        if who in ("owner", "who", "agent", ""):
+            continue                                  # header row
+        who = re.split(r"\s+/\s+", who)[0].strip()     # "lead / user" -> "lead", but
+        #                                               "cluster/WS agent" is one name, not two
+        paths = []
+        for raw in cells[1].replace("|", ",").split(","):
+            g = raw.strip().strip("`")
+            if not g or g.lower().startswith("any "):  # "any supervisor/launcher" is prose
+                continue
+            paths.append(g)
+        if who and paths:
+            ownership.setdefault(who, []).extend(paths)
+    return ownership
