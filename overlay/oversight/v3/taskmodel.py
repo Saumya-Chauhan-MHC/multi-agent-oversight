@@ -90,6 +90,11 @@ def graded_dirs(tm):
         d = os.path.dirname(f)
         if d:
             out.add(d.rstrip("/") + "/")
+    if tm.get("graded_dirs") is not None:
+        # An explicit list, as v4 builds from the developer's own RULES.md. Scanning rule prose
+        # for directory names is a guess, and it guesses wrong: a rule that merely says "never
+        # skip a test" yields the directory `test/`, which then grades every path containing it.
+        return out | {d.rstrip("/") + "/" for d in tm["graded_dirs"] if d}
     for p in preferences(tm):
         for m in re.findall(r"\b((?:[\w.-]+/)*tests?(?:/[\w.-]+)*)/?\b", p.get("rule") or ""):
             if m and not m.endswith((".py", ".js", ".ts", ".go")):
