@@ -162,6 +162,51 @@ check("a no is silent", policy5.decide({"breaks": False}) == "silent")
 check("there is no middle band",
       {policy5.decide({"breaks": b}) for b in (True, False)} == {"hold", "silent"})
 
+# --- the gate must survive an action that names no file ---------------------------------------
+#
+# `flag = dict(target=mine, ...)` read a loop variable bound only inside `for mine in paths`. A
+# Task spawn has no file path, so paths was empty, mine was unbound, and the NameError was
+# swallowed by the hook's fail-open handler. The judgement was made, a model call was spent, and
+# the result was dropped with no crash log and no missing-event warning. In one live arm that was
+# all five subagent spawns: 44 judgements recorded, 0 of them Task.
+#
+# This runs the real hook as a subprocess, because the bug only existed in the hook and a unit
+# test of the modules would not have caught it.
+import subprocess, tempfile, shutil
+
+HOOK = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))), ".claude", "hooks", "v5_gate.py")
+OVDIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _gate(payload, judge_says_no=True):
+    """Run the hook on one action and return (exit code, events written)."""
+    d = tempfile.mkdtemp()
+    open(os.path.join(d, "PROMPT.md"), "w").write(
+        "Build the service. Spawn one subagent per area.\nIds use the prefix cus_.\n")
+    shutil.copytree(OVDIR, os.path.join(d, "oversight"),
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    open(os.path.join(d, "oversight", "events.jsonl"), "w").write(
+        json.dumps({"ov_event": "subagent_start", "agent_id": "b"}) + "\n")
+    env = dict(os.environ, CLAUDE_PROJECT_DIR=d, OV_SIMUSER="1")
+    p = subprocess.run([sys.executable, HOOK], input=json.dumps(payload), text=True,
+                       capture_output=True, env=env, timeout=120)
+    evs = [json.loads(l) for l in open(os.path.join(d, "oversight", "events.jsonl"))
+           if l.strip()]
+    return p.returncode, [e for e in evs if e.get("ov_event") == "v5_judgement"]
+
+
+code, judged = _gate({"tool_name": "Task", "cwd": ".",
+                      "tool_input": {"description": "customers area",
+                                     "prompt": "Build customers and payment methods"}})
+check("a spawn with no file path does not crash the gate", code == 0)
+check("and its judgement is actually recorded", len(judged) == 1)
+
+code, judged = _gate({"tool_name": "Bash", "agent_id": "a", "cwd": ".",
+                      "tool_input": {"command": "kill -9 4321"}})
+check("a shell command naming no file does not crash the gate", code == 0)
+check("and its judgement is recorded too", len(judged) == 1)
+
 print("%d passed, %d failed" % (len(ok), len(fail)))
 for f in fail:
     print("  FAILED: %s" % f)

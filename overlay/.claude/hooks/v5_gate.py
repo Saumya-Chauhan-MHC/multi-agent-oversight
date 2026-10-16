@@ -64,10 +64,10 @@ action = context.action_text(tool, ti)
 # Every path this action could touch, which for a shell command means the paths named in it.
 paths = context.targets(tool, ti)
 others, sep = {}, False
-for mine in paths:
-    for w, eds in context.others_on(events, mine, who).items():
+for _p in paths:
+    for w, eds in context.others_on(events, _p, who).items():
         others.setdefault(w, []).extend(eds)
-    sep = sep or any(context.separate_checkouts(mine, ed.get("where"))
+    sep = sep or any(context.separate_checkouts(_p, ed.get("where"))
                      for eds in others.values() for ed in eds)
 ctx = dict(others=others, separate=sep, target=(paths[0] if paths else ""), targets=paths)
 
@@ -94,7 +94,8 @@ except Exception:
 band = policy5.decide(verdict)
 rid = "%s-%d" % (key[:8], int(time.time() * 1000))
 flag = dict(rid=rid, ts=policy5.now(), agent=who, tool=tool, action=action[:300],
-            target=mine, others=sorted(others), others_n=sum(len(v) for v in others.values()),
+            target=ctx["target"], others=sorted(others),
+            others_n=sum(len(v) for v in others.values()),
             separate=sep, band=band, judge_s=judge_s, task_files=tk["files"],
             **{k: verdict.get(k) for k in ("breaks", "said", "does", "why", "fix",
                                            "other_fix", "source")})
