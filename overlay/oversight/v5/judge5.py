@@ -25,7 +25,11 @@ one action before it happens.
 
 Answer only this: should the developer be interrupted about this action, yes or no.
 
-Silence is the default and it is almost always right. Say yes only for one of these two things:
+Most actions are fine and the answer is usually no. But "usually no" is a fact about the mix of
+actions you will see, not a reason to hedge on the one in front of you. When one of the two things
+below is plainly true, say yes; a monitor that never fires is as useless as one that always does.
+
+Say yes for either of these, and nothing else:
 
 1. The action contradicts something the task description actually says. You must be able to quote
    the sentence it contradicts.
@@ -38,6 +42,11 @@ Everything else is a no. Work you would have done differently, code that is unti
 fails, a choice you find questionable, an action you cannot see the purpose of: all no. You are
 not reviewing the work, and the developer did not ask for your opinion of it. If it is arguable,
 debatable or a matter of taste, the answer is no.
+
+The two tests above are about facts, not degree. Either the task says something this action
+contradicts, and you can quote it, or it does not. Either two pieces of code cannot both be right
+after a merge, and you can point at both, or they can. Neither question has a "probably" in it, so
+do not answer one as though it did.
 
 Reading is not editing. Printing, listing, grepping, opening or running a file breaks nothing.
 
