@@ -148,7 +148,9 @@ def main():
 
     hr("3 · an agent edits the tests that grade it")
     out = fire(proj, "Write", {"file_path": "spec/hurl/auth.hurl",
-                               "content": "# relaxed for now\nGET {{host}}/api/tags\nHTTP 200\n"},
+                               "content": "POST {{host}}/api/users/login\n"
+                                          "{\"user\":{\"email\":\"a@b.c\","
+                                          "\"password\":\"pw\"}}\n\nHTTP 200\n"},
                "sub_auth")
     print(("%s%s%s" % (R, out, X)) if out else "   (silent)")
     print("   %s→ shown to you. the agent is paused until you answer%s" % (D, X))
@@ -223,9 +225,14 @@ def main():
     hr("8 · you answer, and the rule itself changes")
     before = next(p["rule"] for p in tmod.preferences(tmod.load(proj)) if p["category"] == "P2")
     out = fire(proj, "Write", {"file_path": "app/comments.py",
-                               "content": "import sqlite3\n"
-                                          "db = sqlite3.connect('c.db')  # own connection, "
-                                          "not the shared storage layer\n"}, "sub_comments")
+                               "content": "import sqlite3\n\n"
+                                          "DB = sqlite3.connect('comments.db', "
+                                          "check_same_thread=False)\n\n"
+                                          "def add_comment(slug, body, author):\n"
+                                          "    DB.execute('INSERT INTO comments "
+                                          "(slug, body, author) VALUES (?,?,?)',\n"
+                                          "               (slug, body, author))\n"
+                                          "    DB.commit()\n"}, "sub_comments")
     print(("%s%s%s" % (Y, out, X)) if out else "   (silent)")
     beat(2)
     typed = "a read-only helper is fine, only writes have to go through the shared layer"

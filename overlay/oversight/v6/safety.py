@@ -166,6 +166,22 @@ def interface_dependents(dep, target, acting, minimum=None):
     return sorted(users) if len(users) >= minimum else None
 
 
+# Whether an editing action with no filter hit is still put to the judge. Default on.
+#
+# The word-overlap net only fires when the action's text shares vocabulary with the rule, and a
+# real violation usually shares none. Writing `import sqlite3` instead of
+# `from app.shared.storage import store` departs from "the storage layer is defined once" without
+# containing the words storage, layer or shared, so it never became a candidate and the judge was
+# never asked. The demo only appeared to work because the sample code carried a comment saying
+# "own connection, not the shared storage layer", which put the rule's own words in the action.
+#
+# v5 found the same thing from the other side and deleted its filter outright. The compromise
+# here: the lookups still run first and still catch what they are good at, and anything that
+# edits the repository and matched nothing is judged anyway rather than discarded.
+JUDGE_ALL_EDITS = os.environ.get("OV_JUDGE_ALL_EDITS", "1") != "0"
+EDITS = ("Write", "Edit", "MultiEdit")
+
+
 def check_action(tm, events, tool_name, tool_input, agent_id):
     """Before an action lands. Returns a safety finding, a preference hit, or None."""
     hit = f3.check(tm, events, tool_name, tool_input, agent_id)
@@ -188,6 +204,9 @@ def check_action(tm, events, tool_name, tool_input, agent_id):
 
     if hit:
         return dict(kind="preference", reason=hit["reason"], detail=hit.get("detail"))
+    if JUDGE_ALL_EDITS and tool_name in EDITS and (tool_input or {}).get("file_path"):
+        return dict(kind="preference", reason="unmatched_edit",
+                    detail=(tool_input or {}).get("file_path"))
     return None
 
 

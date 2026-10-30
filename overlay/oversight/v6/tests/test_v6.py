@@ -292,6 +292,29 @@ judge6.j2.run = lambda *a, **k: (None, "timeout")
 check("an unreachable judge says so",
       "unavailable" in judge6.preference_check(tmj, {}, "x")[1])
 
+# Regression: the word-overlap net only fires when the action's text shares vocabulary with the
+# rule, and a real violation usually shares none. `import sqlite3` departs from "the storage
+# layer is defined once" without containing storage, layer or shared, so it never became a
+# candidate. The demo only looked right because its sample code carried a comment with the rule's
+# own words in it.
+_tmw = dict(requirements=[], preferences=[dict(
+    id="P1", category="P2", section="Shared interfaces",
+    rule="The storage layer is defined once and every endpoint family calls it.")],
+    agents={}, decisions=[])
+_real = {"file_path": "app/comments.py",
+         "content": "import sqlite3\nDB = sqlite3.connect('c.db')\n"}
+check("a realistic edit sharing no words is still judged",
+      (safety.check_action(_tmw, [], "Write", _real, "a") or {}).get("reason") == "unmatched_edit")
+check("a lexical hit still reports as the lookup that found it",
+      (safety.check_action(_tmw, [], "Write",
+                           {"file_path": "app/x.py",
+                            "content": "the storage layer is defined once here"},
+                           "a") or {}).get("reason") == "word_overlap")
+check("reading is never a candidate",
+      safety.check_action(_tmw, [], "Read", {"file_path": "app/comments.py"}, "a") is None)
+check("an edit naming no file is not a candidate",
+      safety.check_action(_tmw, [], "Write", {"content": "x"}, "a") is None)
+
 check("a read-only shell command is not judged at all",
       context.read_only_command("find . -name '*.yml' | head -20"))
 check("but a writing one is", not context.read_only_command("rm -rf app/"))
