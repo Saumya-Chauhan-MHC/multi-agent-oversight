@@ -45,8 +45,9 @@ def setup(proj):
     open(os.path.join(proj, "PROMPT.md"), "w").write(PRD)
     shutil.copytree(os.path.join(OVERLAY, "oversight"), os.path.join(proj, "oversight"),
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "snap"))
-    shutil.copy(os.path.join(OVERLAY, ".claude", "hooks", "v6_gate.py"),
-                os.path.join(proj, ".claude", "hooks"))
+    for h in ("v6_gate.py", "v6_feedback.py"):
+        shutil.copy(os.path.join(OVERLAY, ".claude", "hooks", h),
+                    os.path.join(proj, ".claude", "hooks"))
     tm = prefs.build(None, PRD, "PROMPT.md")
     tm["graded_dirs"] = ["spec/hurl/"]
     tmod.save(proj, tm)
@@ -70,6 +71,18 @@ def fire(proj, tool, ti, agent):
         return None
     try:
         return json.loads(p.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+    except Exception:
+        return None
+
+
+def reply(proj, text):
+    """What the developer types next. A PreToolUse hook exits before the answer arrives, so the
+    reply is caught by UserPromptSubmit and paired with the question the gate recorded."""
+    p = subprocess.run([sys.executable, os.path.join(proj, ".claude", "hooks", "v6_feedback.py")],
+                       input=json.dumps(dict(prompt=text, cwd=proj)), capture_output=True,
+                       text=True, env=dict(os.environ, CLAUDE_PROJECT_DIR=proj), cwd=proj)
+    try:
+        return json.loads(p.stdout)["systemMessage"]
     except Exception:
         return None
 
@@ -155,7 +168,25 @@ def main():
     print("   %s  contract, no later answer repairs it%s" % (D, X))
     beat(2)
 
-    hr("6 · what is still waiting, and the graph")
+    hr("6 · a preference flag, and the answer that moves the rule")
+    before = next(p["rule"] for p in tmod.preferences(tmod.load(proj)) if p["category"] == "P2")
+    out = fire(proj, "Write", {"file_path": "app/comments.py",
+                               "content": "import sqlite3\n"
+                                          "db = sqlite3.connect('c.db')  # own connection, "
+                                          "not the shared storage layer\n"}, "sub_comments")
+    print(("%s%s%s" % (Y, out, X)) if out else "   (silent)")
+    beat(2)
+    typed = "a read-only helper is fine, only writes have to go through the shared layer"
+    print("\n   %syou type:%s \"%s\"" % (B, X, typed))
+    msg = reply(proj, typed)
+    print("   %s%s%s" % (G, msg, X))
+    after = next(p["rule"] for p in tmod.preferences(tmod.load(proj)) if p["category"] == "P2")
+    if after != before:
+        print("   %swas: %s%s" % (D, before[:70], X))
+        print("   %snow: %s%s" % (G, after[:110], X))
+    beat(2)
+
+    hr("7 · what is still waiting, and the graph")
     print("   queue depths: %s" % (surface.depths(proj),))
     ev = [json.loads(l) for l in open(os.path.join(proj, "oversight", "events.jsonl"))
           if l.strip().startswith("{")]
@@ -163,7 +194,7 @@ def main():
     c = Counter(e.get("ov_event") for e in ev if str(e.get("ov_event")).startswith("v6"))
     print("   events: %s" % dict(c))
     if a.dag:
-        hr("7 · the DAG: who built on what, and where the findings landed")
+        hr("8 · the DAG: who built on what, and where the findings landed")
         env = dict(os.environ, CLAUDE_PROJECT_DIR=proj)
         srv = subprocess.Popen(
             [sys.executable, os.path.join(OVERLAY, "oversight", "v6", "viewer", "serve.py"),

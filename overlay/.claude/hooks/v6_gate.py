@@ -108,6 +108,13 @@ surface.pop(PROJ, item["channel"], item["key"])
 align.append_event(PROJ, dict(ov_event="v6_surfaced", channel=item["channel"], key=item["key"],
                               combined=len(item["members"]), depths=surface.depths(PROJ)))
 
+# Record what was just asked, so the next thing the developer types can be paired with it.
+# Without this the answer has nowhere to land and the preference model never moves.
+head = item["members"][0]
+json.dump(dict(channel=item["channel"], key=item["key"], pid=head.get("pid"),
+               target=head.get("action"), ts=time.time()),
+          open(os.path.join(surface.ctl(PROJ), "awaiting.json"), "w"))
+
 print(json.dumps({"systemMessage": text,
                   "hookSpecificOutput": {"hookEventName": "PreToolUse",
                                          "permissionDecision": "ask",

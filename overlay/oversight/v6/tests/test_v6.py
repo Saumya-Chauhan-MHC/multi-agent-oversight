@@ -304,5 +304,47 @@ check("and it is not in the preference set",
       not any("POST /api/users" in p["rule"] for p in tmc["preferences"]))
 check("an unheaded bullet has no category", prefs.categorize("Background") is None)
 
+# ---- 11. the gate records what it asked, so an answer has somewhere to land -----------------
+# Regression: update_from_feedback was wired to nothing but the demo and the tests. The hook that
+# asks exits before the developer replies, so without a record of the question the preference
+# model could never move in a real run.
+import subprocess as _sp
+
+_ov = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))      # .../overlay
+_proj = tempfile.mkdtemp(prefix="v6ask_")
+os.makedirs(os.path.join(_proj, ".claude", "hooks"))
+shutil = __import__("shutil")
+shutil.copytree(os.path.join(_ov, "oversight"), os.path.join(_proj, "oversight"),
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "snap"))
+for _h in ("v6_gate.py", "v6_feedback.py"):
+    shutil.copy(os.path.join(_ov, ".claude", "hooks", _h), os.path.join(_proj, ".claude", "hooks"))
+_PRD = "# S\n## Shared interfaces\n- The storage layer is defined once and every family calls it.\n"
+open(os.path.join(_proj, "PROMPT.md"), "w").write(_PRD)
+tmod.save(_proj, prefs.build(None, _PRD, "PROMPT.md"))
+
+
+def _hook(h, payload):
+    return _sp.run([sys.executable, os.path.join(_proj, ".claude", "hooks", h)],
+                   input=json.dumps(payload), capture_output=True, text=True,
+                   env=dict(os.environ, CLAUDE_PROJECT_DIR=_proj), cwd=_proj)
+
+
+check("the feedback hook does nothing with no question outstanding",
+      _hook("v6_feedback.py", dict(prompt="anything", cwd=_proj)).stdout.strip() == "")
+
+_aw = os.path.join(_proj, "control6", "awaiting.json")
+os.makedirs(os.path.dirname(_aw), exist_ok=True)
+json.dump(dict(channel="preference", key="pref:P1", pid="P1", target="app/x.py",
+               ts=time.time()), open(_aw, "w"))
+check("a slash command is not an answer",
+      _hook("v6_feedback.py", dict(prompt="/clear", cwd=_proj)).stdout.strip() == "")
+check("and the question is still outstanding", os.path.exists(_aw))
+
+json.dump(dict(channel="preference", key="pref:P1", pid="P1", target="app/x.py",
+               ts=time.time() - surface.QUIET_S - 10), open(_aw, "w"))
+_hook("v6_feedback.py", dict(prompt="too late to be about that", cwd=_proj))
+check("a stale question is dropped rather than answered", not os.path.exists(_aw))
+
 print("%d passed, %d failed" % (OK, FAIL))
 sys.exit(1 if FAIL else 0)
