@@ -65,7 +65,34 @@ python3 oversight/v6/shot.py ~/Downloads/v6_screenshots
 `demo6.py` runs `.claude/hooks/v6_gate.py` as a subprocess with real payloads. Nothing is mocked
 except the developer typing, and the judge in stage 7 unless `OV_DEMO_LIVE_JUDGE=1`.
 
-## Two bugs this build found
+## The first live task
+
+[RealWorld "Conduit"](https://github.com/gothinkster/realworld), not a benchmark: a real
+open-source spec whose premise is that many stacks implement one fixed API. The wire contract is
+pinned by `specs/api/openapi.yml` and 13 `.hurl` suites; storage, framework and process model are
+open. Five endpoint families, one shared storage layer, one JWT helper, one error envelope, one
+port. All three safety surfaces are native to the task rather than staged for it.
+
+Run with `~/research/realworld_arms/setup_rw.py`, graded with `grade_rw.sh`.
+
+From one arm, six subagents, agents on Haiku and the judge on Sonnet:
+
+| | |
+|---|---|
+| findings | 68 (46 preference, 22 safety) |
+| reached the judge | 25 |
+| safety: judge found a reason in the rules | 0 |
+| safety: blocked | 21 |
+| preference departures confirmed | 4 |
+| surfaced | 22 |
+
+The confirmed departures were both P2 rules -- the storage layer defined once, and the shared JWT
+and error-envelope helpers -- which is what should fire in a six-agent parallel build. Every
+safety finding was a shared file two or more agents had already built on.
+
+No arm has been graded yet. These are counts of what the tool did, not evidence that it helped.
+
+## Five bugs the live runs found
 
 **Miscoordination-before was dead code.** `v3.taskmodel.interface_dependents` looks the file up in
 a `files` list on the P2 preferences. Only the extractor ever populated that list. When the
@@ -78,8 +105,25 @@ which is also the more standard shape: `rdeps` does not ask anyone to declare wh
 preempting item, so a moving interface sitting behind two older flags waited its turn like
 anything else. Found by the demo: stage 5 claimed to preempt and did not.
 
+**The alignment check was missing.** The SSOT's order is execution -> LLMAJ alignment check ->
+surfacing, and the first build went straight from detection to surfacing. The word-overlap path
+is v3's recall net, deliberately over-inclusive so nothing is discarded before a model sees it,
+which makes its output a candidate and not a verdict. The first live arm put 69 flags up in
+minutes, every one of them the word "user" in a shell command.
+
+**Categories were assigned by list order**, which filed the ownership rule under P3 and the
+shared-interface rule under P4 -- the two rules whose category decides which safety detector they
+extend. The parser already records each bullet's heading, so it is a lookup. Bullets under none
+of the four headings are requirements, not preferences, which is where the "user" noise came
+from: the endpoint list was sitting in the preference set.
+
+**Only departures were logged**, so a run showed how often the tool spoke and never how often it
+decided not to -- which is the denominator precision needs.
+
 ## Still open
 
-- `v6_gate.py` is wired nowhere in `overlay/.claude/settings.json`
-- the DAG view is v3's and has not been re-pointed at v6's events
-- no arm has been run with v6; everything above is the test suite and the demo
+- `v6_gate.py` is wired nowhere in `overlay/.claude/settings.json`, so cloning still gets v3's
+  hooks. `setup_rw.py` writes its own settings and does not depend on that file
+- no arm has been graded. `grade_rw.sh` needs `hurl` (`brew install hurl`)
+- the word-overlap recall net still produces most of the findings; the judge discards them, but
+  each one costs a judge call
