@@ -75,6 +75,63 @@ def fire(proj, tool, ti, agent):
         return None
 
 
+def surfaced(proj, notice_text, target, interactive, pid_hint=""):
+    """One notice reaching you, end to end: the prompt, your answer, and what it changed.
+
+    In a real session the prompt is Claude Code's, drawn from permissionDecisionReason. The
+    answer path below -- v6_feedback.py, the judge, the rewrite -- is the real code either way.
+    """
+    ans = ask_you(proj, notice_text, target, interactive)
+    note = type_back(proj, interactive, "")
+    if not note:
+        print("   %s(no note: the flag stands, nothing about the rule changes)%s" % (D, X))
+        return
+    msg = reply(proj, note)
+    if msg:
+        print("   %s%s%s" % (G, msg, X))
+
+
+def ask_you(proj, notice_text, target, interactive):
+    """What a real session does at this point, with you in it.
+
+    In a real run this hook returns permissionDecision "ask" and Claude Code draws the prompt;
+    the tool never renders a dialog itself. The block below is that prompt, stood up here so the
+    loop can be walked through without launching an agent. Everything after you answer -- the
+    feedback hook, the judge, the rewrite of the rule -- is the real code path.
+    """
+    print("%s%s%s" % (R, notice_text, X))
+    print("\n   %s┌─ Claude Code pauses the agent here and asks you ──────────────%s" % (D, X))
+    if not interactive:
+        print("   %s│  (scripted run: answering 'n' automatically)%s" % (D, X))
+        print("   %s└───────────────────────────────────────────────────────────────%s" % (D, X))
+        return "n"
+    print("   %s│%s  allow this action?" % (D, X))
+    print("   %s└───────────────────────────────────────────────────────────────%s" % (D, X))
+    try:
+        ans = input("   %s[y]es / [n]o >%s " % (B, X)).strip().lower()[:1] or "n"
+    except EOFError:
+        ans = "n"
+    if ans == "y":
+        # The action ran. The feedback hook reads that off the event log rather than guessing
+        # from your wording, so record it the way a real PostToolUse would.
+        events(proj, [dict(ov_event="post_tool", tool_name="Write",
+                           tool_input={"file_path": target})])
+    return ans
+
+
+def type_back(proj, interactive, scripted):
+    """The note you type next. In a real session this is just your next message to the agent."""
+    if not interactive:
+        if scripted:
+            print("   %syou type:%s \"%s\"" % (B, X, scripted))
+        return scripted
+    try:
+        t = input("   %sanything to say about it? (enter to skip) >%s " % (B, X)).strip()
+    except EOFError:
+        t = ""
+    return t
+
+
 def reply(proj, text):
     """What the developer types next. A PreToolUse hook exits before the answer arrives, so the
     reply is caught by UserPromptSubmit and paired with the question the gate recorded."""
@@ -93,6 +150,9 @@ def main():
     ap.add_argument("--dag", action="store_true",
                     help="serve the graph at the end and open it, for a recording")
     ap.add_argument("--port", type=int, default=8790)
+    ap.add_argument("--interactive", "-i", action="store_true",
+                    help="stop at each notice and wait for you to answer, the way a real session "
+                         "does. Without it the answers are scripted and the run is hands-off.")
     ap.add_argument("--quiet", type=int, default=0,
                     help="quiet window in seconds. the real setting is 600; a walkthrough sets "
                          "it to about 60 so the wait can be watched rather than described")
@@ -152,8 +212,10 @@ def main():
                                           "{\"user\":{\"email\":\"a@b.c\","
                                           "\"password\":\"pw\"}}\n\nHTTP 200\n"},
                "sub_auth")
-    print(("%s%s%s" % (R, out, X)) if out else "   (silent)")
-    print("   %s→ shown to you. the agent is paused until you answer%s" % (D, X))
+    if out:
+        surfaced(proj, out, "spec/hurl/auth.hurl", a.interactive)
+    else:
+        print("   (silent)")
     beat(2)
 
     hr("4 · seconds later: an agent kills another agent's server")
@@ -193,7 +255,10 @@ def main():
     out = fire(proj, "Edit", {"file_path": "app/shared/jwt_helper.py",
                               "old_string": "def verify(t)",
                               "new_string": "def verify(t, audience)"}, "sub_auth")
-    print(("%s%s%s" % (R, out, X)) if out else "   (silent)")
+    if out:
+        surfaced(proj, out, "app/shared/jwt_helper.py", a.interactive)
+    else:
+        print("   (silent)")
     print("   %s→ it jumped the queue. once every dependent has built on the old%s" % (D, X))
     print("   %s  contract, no later answer repairs it%s" % (D, X))
     beat(2)
@@ -217,9 +282,9 @@ def main():
     nxt = surface.next_to_show(proj)
     if nxt:
         print("\n   %s→ the held flag now surfaces, oldest first%s" % (D, X))
-        print("%s%s%s" % (R, surface.notice(nxt), X))
         surface.mark_shown(proj, nxt["channel"])
         surface.pop(proj, nxt["channel"], nxt["key"])
+        surfaced(proj, surface.notice(nxt), "port:8000", a.interactive)
     beat(2)
 
     hr("8 · you answer, and the rule itself changes")
@@ -233,12 +298,11 @@ def main():
                                           "(slug, body, author) VALUES (?,?,?)',\n"
                                           "               (slug, body, author))\n"
                                           "    DB.commit()\n"}, "sub_comments")
-    print(("%s%s%s" % (Y, out, X)) if out else "   (silent)")
-    beat(2)
-    typed = "a read-only helper is fine, only writes have to go through the shared layer"
-    print("\n   %syou type:%s \"%s\"" % (B, X, typed))
-    msg = reply(proj, typed)
-    print("   %s%s%s" % (G, msg, X))
+    if not out:
+        print("   (silent)")
+    else:
+        surfaced(proj, out, "app/comments.py", a.interactive,
+                 pid_hint="try: a read-only helper is fine, only writes go through the layer")
     after = next(p["rule"] for p in tmod.preferences(tmod.load(proj)) if p["category"] == "P2")
     if after != before:
         print("   %swas: %s%s" % (D, before[:70], X))
