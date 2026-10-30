@@ -66,9 +66,50 @@ policy from one concrete answer: "not in this file" is a narrow, not a replace.
 """
 
 
+# Which heading a bullet sits under decides its category. The first build assigned categories by
+# list index, which put "each endpoint family is owned by exactly one subagent" under P3 and
+# "the storage layer is defined once" under P4 -- the two rules whose category decides which
+# safety detector they extend. The section heading is already recorded by the parser, so the
+# mapping is a lookup rather than a guess.
+SECTION_CATEGORY = (
+    (("ownership", "decomposition", "assignment"), "P1"),
+    (("interface", "shared", "contract"), "P2"),
+    (("verification", "testing", "tests", "done"), "P3"),
+    (("prioritization", "priority", "order", "scope"), "P4"),
+)
+
+
+def categorize(section):
+    low = (section or "").lower()
+    for keys, cat in SECTION_CATEGORY:
+        if any(k in low for k in keys):
+            return cat
+    return None
+
+
 def build(proj, text=None, source_file="instruction.md"):
-    """Deterministic: the PRD's own bullets become the P1-P4 preference set. No model."""
-    return from_task.write(proj) if text is None else from_task.build(text, source_file)
+    """Deterministic: the PRD's own bullets become the P1-P4 preference set. No model.
+
+    A bullet under none of the four headings is not a preference. The SSOT separates the two:
+    a requirement is what must work, a preference is how we favour achieving it. The endpoint
+    list in a spec is the former, and filing it as a preference both mislabels it and pollutes
+    the word-overlap recall net with every noun in the API.
+    """
+    tm = from_task.write(proj) if text is None else from_task.build(text, source_file)
+    if isinstance(tm, tuple):                      # from_task.write returns (tm, n, src)
+        tm = tm[0]
+    keep, reqs = [], []
+    for p in tm.get("preferences", []):
+        cat = categorize(p.get("section"))
+        if cat:
+            p["category"] = cat
+            keep.append(p)
+        else:
+            reqs.append(dict(id="R%d" % (len(reqs) + 1), text=p.get("rule"),
+                             section=p.get("section"), check=None, status="untested"))
+    tm["preferences"] = keep
+    tm["requirements"] = reqs
+    return tm
 
 
 def history(tm, pid):

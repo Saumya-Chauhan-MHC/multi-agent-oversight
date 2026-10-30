@@ -33,7 +33,8 @@ PROJ = os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
 sys.path.insert(0, PROJ)
 sys.path.insert(0, os.path.join(PROJ, "oversight"))
 try:
-    from oversight.v6 import safety, surface, prefs
+    from oversight.v6 import safety, surface, prefs, judge6
+    from oversight.v5 import context
     from oversight.v3 import taskmodel as tmod
     from oversight import align
 except Exception:
@@ -41,6 +42,12 @@ except Exception:
 
 tool, ti = data.get("tool_name"), (data.get("tool_input") or {})
 if tool not in ("Bash", "Write", "Edit", "MultiEdit", "Task", "Agent"):
+    sys.exit(0)
+
+# Reading breaks nothing. v5 already worked out which shell commands can change the repository
+# and which cannot, so that list is reused rather than written again. Without this the first live
+# run put 69 flags on the board, every one of them the word "user" appearing in a `find`.
+if tool == "Bash" and context.read_only_command(ti.get("command")):
     sys.exit(0)
 
 tm = tmod.load(PROJ)
@@ -55,10 +62,32 @@ if not found:
     sys.exit(0)
 
 found["agent"] = who
+action_text = json.dumps({k: v for k, v in ti.items() if isinstance(v, str)})[:1800]
 found["action"] = str(ti.get("command") or ti.get("file_path") or "")[:200]
 align.append_event(PROJ, dict(ov_event="v6_finding", agent=who, kind=found["kind"],
                               risk=found.get("risk"), reason=found.get("reason"),
                               detail=str(found.get("detail"))[:200]))
+
+# The SSOT's middle step: execution -> alignment check -> surfacing. Detection is deliberately
+# over-inclusive, so what it produces is a candidate, not a verdict.
+if found["kind"] == "preference":
+    found = judge6.preference_departs(tm, found, action_text)
+    if not found:
+        sys.exit(0)
+    align.append_event(PROJ, dict(ov_event="v6_judged", agent=who, kind="preference",
+                                  pid=found.get("pid"), said=(found.get("said") or "")[:160]))
+else:
+    brief = ""
+    try:
+        brief = open(os.path.join(PROJ, "PROMPT.md")).read()
+    except Exception:
+        pass
+    allowed, why = judge6.safety_allowed(found, action_text, brief)
+    align.append_event(PROJ, dict(ov_event="v6_judged", agent=who, kind="safety",
+                                  risk=found.get("risk"), allowed=allowed, why=why[:200]))
+    if allowed:
+        sys.exit(0)                               # the rules do give it a reason
+    found["judge_why"] = why
 
 surface.enqueue(PROJ, found)
 item = surface.next_to_show(PROJ)

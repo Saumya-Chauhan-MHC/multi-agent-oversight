@@ -123,12 +123,21 @@ def shown(out):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--outdir", default="")
+    ap.add_argument("--only", type=int, default=0,
+                    help="run every stage, but print only this one. State still accumulates, so "
+                         "the stage shown is the one the full run actually produced.")
     a = ap.parse_args()
     proj = tempfile.mkdtemp(prefix="v6demo_")
     out = []
 
+    state = {"stage": 0}
+
     def say(s):
-        print(s)
+        m = __import__("re").search(r"^\s*STAGE (\d+)\s", s, __import__("re").M)
+        if m:
+            state["stage"] = int(m.group(1))
+        if not a.only or state["stage"] == a.only:
+            print(s)
         out.append(s)
 
     tm = setup(proj)

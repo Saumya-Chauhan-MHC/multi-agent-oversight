@@ -190,5 +190,74 @@ n = surface.notice(dict(channel="preference", key="k", members=[PREF]))
 for field in ("action", "preference", "evidence", "your call"):
     check("preference notice shows %s" % field, field in n)
 
+# ---- 9. the alignment check between detection and surfacing --------------------------------
+# Regression: the first live run surfaced the raw word-overlap path with no judge. 69 flags in
+# one run, every one of them the word "user" appearing in a command.
+from oversight.v6 import judge6
+from oversight.v5 import context
+
+tmj = dict(requirements=[], preferences=[
+    dict(id="P1", category="P1", rule="Each endpoint family is owned by exactly one subagent.")],
+    agents={}, decisions=[])
+
+judge6.j2.run = lambda *a, **k: (None, "timeout")
+check("an unreachable judge keeps a preference guess silent",
+      judge6.preference_departs(tmj, dict(agent="a"), "x") is None)
+allowed, why = judge6.safety_allowed(dict(ask="q", reason="graded_file"), "x")
+check("but an unreachable judge still surfaces a safety fact", allowed is False)
+
+judge6.j2.run = lambda *a, **k: (json.dumps(
+    dict(departs=True, pid="P1", said="a sentence that is not in the rule")), None)
+check("a quote that is not in the preference is refused",
+      judge6.preference_departs(tmj, dict(agent="a"), "x") is None)
+
+judge6.j2.run = lambda *a, **k: (json.dumps(
+    dict(departs=True, pid="NOPE", said="Each endpoint family is owned")), None)
+check("a quote attributed to a preference that does not exist is refused",
+      judge6.preference_departs(tmj, dict(agent="a"), "x") is None)
+
+judge6.j2.run = lambda *a, **k: (json.dumps(
+    dict(departs=True, pid="P1", said="Each endpoint family is owned",
+         why="w", correction="c")), None)
+got = judge6.preference_departs(tmj, dict(agent="a"), "x")
+check("a quoted departure passes", got is not None and got["pid"] == "P1")
+check("and carries the rule it is about", got["rule"].startswith("Each endpoint family"))
+
+judge6.j2.run = lambda *a, **k: (json.dumps(dict(departs=False)), None)
+check("a no stays silent", judge6.preference_departs(tmj, dict(agent="a"), "x") is None)
+
+check("a read-only shell command is not judged at all",
+      context.read_only_command("find . -name '*.yml' | head -20"))
+check("but a writing one is", not context.read_only_command("rm -rf app/"))
+
+# ---- 10. categories come from the heading, not from list order ------------------------------
+# Regression: assigning by index put the ownership rule under P3 and the shared-interface rule
+# under P4, and the category is what decides which safety detector a rule extends.
+SPEC = """# Spec
+## Endpoints
+- Users and auth: POST /api/users (register), POST /api/users/login, GET /api/user.
+## Ownership and decomposition
+- Each endpoint family is owned by exactly one subagent and no other subagent writes its files.
+## Shared interfaces
+- The storage layer is defined once and every endpoint family calls it rather than reimplementing.
+## Verification
+- An agent may not modify the tests that grade it, including by skipping or weakening them.
+## Prioritization
+- Users and articles come before tags and favorites, which are optional until the rest is green.
+"""
+tmc = prefs.build(None, SPEC, "SPEC.md")
+cats = {p["category"] for p in tmc["preferences"]}
+check("all four categories are found", cats == {"P1", "P2", "P3", "P4"})
+by = {p["category"]: p["rule"] for p in tmc["preferences"]}
+check("ownership is P1", by["P1"].startswith("Each endpoint family is owned"))
+check("the shared interface is P2", by["P2"].startswith("The storage layer is defined once"))
+check("not modifying the grader is P3", "may not modify the tests" in by["P3"])
+check("ordering is P4", "come before" in by["P4"])
+check("an endpoint list is a requirement, not a preference",
+      len(tmc["requirements"]) == 1 and "POST /api/users" in tmc["requirements"][0]["text"])
+check("and it is not in the preference set",
+      not any("POST /api/users" in p["rule"] for p in tmc["preferences"]))
+check("an unheaded bullet has no category", prefs.categorize("Background") is None)
+
 print("%d passed, %d failed" % (OK, FAIL))
 sys.exit(1 if FAIL else 0)
