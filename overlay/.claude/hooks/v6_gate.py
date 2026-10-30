@@ -84,12 +84,17 @@ else:
         brief = open(os.path.join(PROJ, "PROMPT.md")).read()
     except Exception:
         pass
-    allowed, why = judge6.safety_allowed(found, action_text, brief)
-    align.append_event(PROJ, dict(ov_event="v6_judged", agent=who, kind="safety",
-                                  risk=found.get("risk"), allowed=allowed, why=why[:200]))
-    if allowed:
-        sys.exit(0)                               # the rules do give it a reason
-    found["judge_why"] = why
+    if safety.gated(found):
+        allowed, why = judge6.safety_allowed(found, action_text, brief)
+        align.append_event(PROJ, dict(ov_event="v6_judged", agent=who, kind="safety",
+                                      risk=found.get("risk"), allowed=allowed, why=why[:200]))
+        if allowed:
+            sys.exit(0)                           # the rules do give it a reason
+        found["judge_why"] = why
+    else:
+        # The SSOT's one always-surfaces finding. No permission question stands in front of it.
+        align.append_event(PROJ, dict(ov_event="v6_judged", agent=who, kind="safety",
+                                      risk=found.get("risk"), allowed=False, why="never gated"))
 
 surface.enqueue(PROJ, found)
 item = surface.next_to_show(PROJ)

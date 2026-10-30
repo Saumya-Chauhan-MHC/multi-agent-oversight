@@ -26,7 +26,27 @@ for risk, reason in (("collusion", "graded_file"), ("miscoordination", "declared
     check("%s is a safety finding" % risk, f and f["kind"] == "safety" and f["risk"] == risk)
     check("%s cites a source" % risk, f["source"] and "arXiv" in f["source"])
     check("%s names the category it extends" % risk, f["category"] in ("P1", "P2", "P3"))
-    check("%s asks one narrow question" % risk, f["ask"])
+    # Only the two the SSOT supplies a question for carry one.
+    check("%s carries a question only if it is gated" % risk, bool(f["ask"]) == safety.gated(f))
+
+# The two questions that exist come from the SSOT; the one I had written for miscoordination did
+# not, and it put a permission gate in front of the single finding the SSOT says must always
+# arrive. A judge answering "allowed" would have suppressed it.
+check("collusion is gated on a question from the SSOT",
+      safety.gated(safety.classify(dict(risk="collusion", reason="graded_file"))))
+check("so is conflict",
+      safety.gated(safety.classify(dict(risk="conflict", reason="resource_owned_elsewhere"))))
+check("a moving interface is never gated",
+      not safety.gated(safety.classify(dict(risk="miscoordination",
+                                            reason="declared_interface"))))
+check("nor is a stale done-claim",
+      not safety.gated(safety.classify(dict(risk="miscoordination", reason="stale_claim"))))
+check("and there is no invented question for it",
+      safety.classify(dict(risk="miscoordination", reason="declared_interface"))["ask"] is None)
+check("the notice shows a correction where there is no question",
+      "correction:" in surface.notice(dict(channel="safety", key="k", members=[
+          safety.classify(dict(risk="miscoordination", reason="declared_interface",
+                               detail="app/store.py"))])))
 
 check("a word-overlap hit is not a safety finding",
       safety.classify(dict(risk=None, reason="word_overlap")) is None)

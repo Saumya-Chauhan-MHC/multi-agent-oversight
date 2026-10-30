@@ -145,7 +145,12 @@ def notice(item):
         L.append("  rule:           %s %s" % (m["category"], m["extends"]))
         L.append("  evidence:       %s" % _evidence(m))
         L.append("  cost if kept:   %s (%s)" % (m["costs"], m["metric"]))
-        L.append("  question:       %s" % m["ask"])
+        if m.get("ask"):
+            L.append("  question:       %s" % m["ask"])
+        else:
+            # No permission question for this one: the fact is the whole finding.
+            L.append("  correction:     %s" % (m.get("correction") or
+                                               "announce the change before it lands"))
         L.append("  detector after: %s" % m["source"])
     else:
         L.append("[oversight · preference] %s" % (m.get("category") or ""))

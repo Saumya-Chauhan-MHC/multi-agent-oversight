@@ -77,6 +77,9 @@ def fire(proj, tool, ti, agent):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pace", type=float, default=1.4)
+    ap.add_argument("--dag", action="store_true",
+                    help="serve the graph at the end and open it, for a recording")
+    ap.add_argument("--port", type=int, default=8790)
     a = ap.parse_args()
     proj = tempfile.mkdtemp(prefix="v6live_")
     P = a.pace
@@ -159,8 +162,22 @@ def main():
     from collections import Counter
     c = Counter(e.get("ov_event") for e in ev if str(e.get("ov_event")).startswith("v6"))
     print("   events: %s" % dict(c))
-    print("\n   %sDAG:%s CLAUDE_PROJECT_DIR=%s \\" % (B, X, proj))
-    print("        python3 oversight/v6/viewer/serve.py 8790")
+    if a.dag:
+        hr("7 · the DAG: who built on what, and where the findings landed")
+        env = dict(os.environ, CLAUDE_PROJECT_DIR=proj)
+        srv = subprocess.Popen(
+            [sys.executable, os.path.join(OVERLAY, "oversight", "v6", "viewer", "serve.py"),
+             str(a.port)], env=env, cwd=OVERLAY,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(2)
+        url = "http://127.0.0.1:%d/" % a.port
+        print("   %sserving %s%s" % (D, url, X))
+        subprocess.run(["open", url])
+        beat(9)
+        srv.terminate()
+    else:
+        print("\n   %sDAG:%s CLAUDE_PROJECT_DIR=%s \\" % (B, X, proj))
+        print("        python3 oversight/v6/viewer/serve.py %d" % a.port)
     print("\n%sproject: %s%s" % (D, proj, X))
     return proj
 
