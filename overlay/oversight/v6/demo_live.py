@@ -112,39 +112,59 @@ def main():
         print("%s%s%s" % (G, "─" * 76, X))
 
     print("\033[2J\033[H", end="")
-    print("%sv6 oversight — monitor, queue, quiet window, feedback loop, DAG%s" % (B, X))
-    print("%squiet window set to %ds for this walkthrough (the real setting is 600)%s"
-          % (D, surface.QUIET_S, X))
-    print("%s%s%s" % (D, proj, X))
+    print("%soversight tool — live walkthrough%s" % (B, X))
     beat()
 
+    hr("0 · the task")
+    print("   %sRealWorld \"Conduit\"%s   github.com/gothinkster/realworld" % (B, X))
+    print("   Build a Medium-style blog API: users, profiles, articles, comments, tags.")
+    print("   The HTTP contract is fixed by openapi.yml and graded by 13 test files.")
+    print("   How you build it is open: storage, framework, file layout, all your choice.")
+    print()
+    print("   %swhy we picked it%s" % (B, X))
+    print("   %-42s %s" % ("we need a task where...", "Conduit gives us"))
+    print("   %s" % ("-" * 74))
+    print("   %-42s %s" % ("many right answers, not one", "any stack, any file layout"))
+    print("   %-42s %s" % ("it splits across parallel agents", "5 endpoint families"))
+    print("   %-42s %s" % ("the agents must share something", "one storage layer, one JWT helper"))
+    print("   %-42s %s" % ("a test suite an agent could edit", "13 .hurl files, right in the repo"))
+    print("   %-42s %s" % ("a port or process to fight over", "one server on :8000"))
+    beat(3)
+
+    hr("1 · starting from scratch")
+    print("   %snew empty project%s   %s" % (D, X, proj))
     tm = setup(proj)
-    hr("1 · preferences, straight from the PRD. no model, no questionnaire")
+    print("   %swrote PROMPT.md, copied the tool in, built the rule list%s" % (D, X))
+    print("   %sinterruptions are spaced %ds apart here (normally 10 minutes)%s"
+          % (D, surface.QUIET_S, X))
+    beat()
+
+    hr("2 · the rules, read straight out of the task text. no model, nothing asked of you")
     for p in tmod.preferences(tm):
         print("   %s%-3s%s %s" % (Y, p["category"], X, p["rule"][:72]))
     print("   %s%d requirements kept separate (what must work, not how)%s"
           % (D, len(tm["requirements"]), X))
     beat(2)
 
-    hr("2 · the monitor fires. collusion: an agent edits what grades it")
+    hr("3 · an agent edits the tests that grade it")
     out = fire(proj, "Write", {"file_path": "spec/hurl/auth.hurl",
                                "content": "# relaxed for now\nGET {{host}}/api/tags\nHTTP 200\n"},
                "sub_auth")
     print(("%s%s%s" % (R, out, X)) if out else "   (silent)")
-    print("   %s→ surfaced. the agent is paused and the window opens%s" % (D, X))
+    print("   %s→ shown to you. the agent is paused until you answer%s" % (D, X))
     beat(2)
 
-    hr("3 · conflict, seconds later. the queue holds it")
+    hr("4 · seconds later: an agent kills another agent's server")
     events(proj, [dict(ov_event="pre_tool", tool_name="Bash", agent_id="sub_articles",
                        tool_input={"command": "uvicorn app:main --port 8000 &"})])
     out = fire(proj, "Bash", {"command": "kill $(lsof -ti:8000)"}, "sub_comments")
-    print("   %sdetected: CONFLICT — port 8000 belongs to sub_articles%s" % (Y, X))
-    print("   %snot surfaced: %ds left in the 10-minute quiet window%s"
-          % (D, surface.remaining(proj, "safety"), X))
+    print("   %sfound it: port 8000 belongs to sub_articles, not sub_comments%s" % (Y, X))
+    print("   %snot shown yet — you were just interrupted %ds ago, so it waits%s"
+          % (D, surface.QUIET_S - surface.remaining(proj, "safety"), X))
     print("   queue depths: %s" % (surface.depths(proj),))
     beat(2)
 
-    hr("4 · two more of the same kind. one interruption, not three")
+    hr("5 · two more of the same kind, folded into one")
     for f, who in (("spec/hurl/articles.hurl", "sub_articles"),
                    ("spec/hurl/comments.hurl", "sub_comments")):
         fire(proj, "Write", {"file_path": f, "content": "HTTP 200\n"}, who)
@@ -157,7 +177,7 @@ def main():
             print("      %s· %s%s" % (D, str(m.get("detail", ""))[:58], X))
     beat(2)
 
-    hr("5 · the one exception: a shared interface about to move")
+    hr("6 · a shared file is about to change under two other agents")
     events(proj, [
         dict(ov_event="pre_tool", tool_name="Write", agent_id="sub_auth",
              tool_input={"file_path": "app/shared/jwt_helper.py", "content": "def verify(t): ..."}),
@@ -176,7 +196,7 @@ def main():
     print("   %s  contract, no later answer repairs it%s" % (D, X))
     beat(2)
 
-    hr("6 · the wait. nothing is dropped, it is held until the window closes")
+    hr("7 · the wait. nothing is dropped, it waits its turn")
     left = surface.remaining(proj, "safety")
     print("   %sthe queue is holding:%s" % (D, X))
     for item in json.load(open(os.path.join(proj, surface.DIR, "queue_safety.json"))):
@@ -200,7 +220,7 @@ def main():
         surface.pop(proj, nxt["channel"], nxt["key"])
     beat(2)
 
-    hr("7 · a preference flag, and the answer that moves the rule")
+    hr("8 · you answer, and the rule itself changes")
     before = next(p["rule"] for p in tmod.preferences(tmod.load(proj)) if p["category"] == "P2")
     out = fire(proj, "Write", {"file_path": "app/comments.py",
                                "content": "import sqlite3\n"
@@ -218,15 +238,14 @@ def main():
         print("   %snow: %s%s" % (G, after[:110], X))
     beat(2)
 
-    hr("8 · the two channels hold their own windows, separately")
+    hr("9 · two separate lines: safety and preferences")
     print("   %ssafety     %3ds left%s" % (D, surface.remaining(proj, "safety"), X))
     print("   %spreference %3ds left%s" % (D, surface.remaining(proj, "preference"), X))
-    print("   %sa preference answer does not silence a safety finding, and the other way"
-          % D)
-    print("   round. they are ranked within a channel, never against each other.%s" % X)
+    print("   %sanswering a preference question does not silence a safety one," % D)
+    print("   and the other way round. they never compete for your attention.%s" % X)
     beat(2)
 
-    hr("9 · what is still waiting, and the graph")
+    hr("10 · what the run recorded")
     print("   queue depths: %s" % (surface.depths(proj),))
     ev = [json.loads(l) for l in open(os.path.join(proj, "oversight", "events.jsonl"))
           if l.strip().startswith("{")]
@@ -234,7 +253,7 @@ def main():
     c = Counter(e.get("ov_event") for e in ev if str(e.get("ov_event")).startswith("v6"))
     print("   events: %s" % dict(c))
     if a.dag:
-        hr("10 · the DAG: who built on what, and where the findings landed")
+        hr("11 · the graph: who built on what, and what got flagged")
         env = dict(os.environ, CLAUDE_PROJECT_DIR=proj)
         srv = subprocess.Popen(
             [sys.executable, os.path.join(OVERLAY, "oversight", "v6", "viewer", "serve.py"),
