@@ -71,11 +71,13 @@ align.append_event(PROJ, dict(ov_event="v6_finding", agent=who, kind=found["kind
 # The SSOT's middle step: execution -> alignment check -> surfacing. Detection is deliberately
 # over-inclusive, so what it produces is a candidate, not a verdict.
 if found["kind"] == "preference":
-    found = judge6.preference_departs(tm, found, action_text)
+    found, why = judge6.preference_check(tm, found, action_text)
+    align.append_event(PROJ, dict(ov_event="v6_judged", agent=who, kind="preference",
+                                  departs=bool(found), why=why,
+                                  pid=(found or {}).get("pid"),
+                                  said=((found or {}).get("said") or "")[:160]))
     if not found:
         sys.exit(0)
-    align.append_event(PROJ, dict(ov_event="v6_judged", agent=who, kind="preference",
-                                  pid=found.get("pid"), said=(found.get("said") or "")[:160]))
 else:
     brief = ""
     try:

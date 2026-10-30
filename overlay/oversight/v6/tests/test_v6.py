@@ -226,6 +226,17 @@ check("and carries the rule it is about", got["rule"].startswith("Each endpoint 
 judge6.j2.run = lambda *a, **k: (json.dumps(dict(departs=False)), None)
 check("a no stays silent", judge6.preference_departs(tmj, dict(agent="a"), "x") is None)
 
+# Every verdict is recorded, not only the ones that speak: precision needs the denominator.
+judge6.j2.run = lambda *a, **k: (json.dumps(dict(departs=False)), None)
+check("a no carries its reason", judge6.preference_check(tmj, {}, "x") == (None, "no departure"))
+judge6.j2.run = lambda *a, **k: (json.dumps(
+    dict(departs=True, pid="P1", said="not in the rule")), None)
+check("an invented quote is recorded as unquoted",
+      judge6.preference_check(tmj, {}, "x")[1] == "unquoted")
+judge6.j2.run = lambda *a, **k: (None, "timeout")
+check("an unreachable judge says so",
+      "unavailable" in judge6.preference_check(tmj, {}, "x")[1])
+
 check("a read-only shell command is not judged at all",
       context.read_only_command("find . -name '*.yml' | head -20"))
 check("but a writing one is", not context.read_only_command("rm -rf app/"))

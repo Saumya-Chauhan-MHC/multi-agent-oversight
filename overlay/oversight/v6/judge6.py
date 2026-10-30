@@ -72,32 +72,44 @@ def _json(text):
         return {}
 
 
-def preference_departs(tm, finding, action_text):
-    """Returns the finding enriched, or None to stay silent. Silent when the judge is unavailable:
-    this path started from a word match, so an unchecked guess is not worth an interruption."""
+def preference_check(tm, finding, action_text):
+    """(finding or None, why). The `why` exists so a no is recorded too.
+
+    Only departures were logged at first, so a run showed how often the tool spoke and never how
+    often it decided not to. That is precisely the denominator the evaluation needs: precision is
+    surfaced-and-accepted over surfaced, and without the silent verdicts there is no surfaced
+    count to divide by, only the ones that got through.
+    """
     prefs = [dict(id=p.get("id"), category=p.get("category"), rule=p.get("rule"))
              for p in tmod.preferences(tm)]
     if not prefs:
-        return None
+        return None, "no preferences"
     user = json.dumps(dict(action=action_text[:1500], agent=finding.get("agent"),
                            preferences=prefs), indent=1)
     text, err = j2.run(PREF_SYSTEM, user, MODEL, TIMEOUT_S)
     if err or not text:
-        return None
+        return None, "judge unavailable: %s" % (err or "empty")
     out = _json(text)
     if not out.get("departs"):
-        return None
+        return None, "no departure"
     pid, said = out.get("pid"), (out.get("said") or "").strip()
     rule = next((p["rule"] for p in prefs if p["id"] == pid), None)
     # The same verbatim guarantee used everywhere else: a quote that is not in the preference it
     # claims to be from is an invented one, and an invented quote is a no.
-    if not rule or not said or " ".join(said.split()).lower() not in " ".join(rule.split()).lower():
-        return None
+    if not rule:
+        return None, "unknown preference: %s" % pid
+    if not said or " ".join(said.split()).lower() not in " ".join(rule.split()).lower():
+        return None, "unquoted"
     f = dict(finding)
     f.update(pid=pid, rule=rule, said=said, category=next(
         (p["category"] for p in prefs if p["id"] == pid), None),
         does=out.get("does"), why=out.get("why"), correction=out.get("correction"))
-    return f
+    return f, "departs"
+
+
+def preference_departs(tm, finding, action_text):
+    """The verdict alone, for callers that do not record the reason."""
+    return preference_check(tm, finding, action_text)[0]
 
 
 def safety_allowed(finding, action_text, brief=""):
