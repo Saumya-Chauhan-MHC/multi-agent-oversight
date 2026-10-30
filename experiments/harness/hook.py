@@ -56,6 +56,14 @@ mapped = {k: to_host(inp[k]) for k in PATH_KEYS if isinstance(inp.get(k), str) a
 if mapped:
     inp = dict(inp, **mapped)
 
+if tool == "mcp__user__ask_user":
+    # Subagents cannot ask the user in Claude Code (no AskUserQuestion); keep that unless told otherwise.
+    if agent != "main" and os.environ.get("IB_ASK_SUBAGENTS") != "1":
+        log("deny-subagent-ask")
+        out("deny", "Only the lead can ask the user. Report the question back in your result instead.")
+    log("allow")
+    out("allow")
+
 if mode == "multi" and agent == "main" and tool in ACTING:
     log("deny-lead")
     out("deny", "As the lead you do not edit files or run commands yourself. "

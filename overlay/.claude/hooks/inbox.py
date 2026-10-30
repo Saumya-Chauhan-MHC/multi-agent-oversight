@@ -48,9 +48,23 @@ if not msgs:
     if notice:
         print(json.dumps({"systemMessage": notice}))
     sys.exit(0)
-ctx = "\n\n".join("<human_overseer_message>\n" + m["text"] + "\n</human_overseer_message>" for m in msgs)
-ctx = ("A human overseeing this task sent you the following. It takes priority over your current plan "
-       "where they conflict.\n\n" + ctx)
+
+def _wrap(m):
+    """Two senders, and the agent is told which. Claiming a relayed fact came from a human would
+    be a lie, and the agent would weigh it differently than it should."""
+    if m.get("kind") == "relay":
+        return ("<oversight_relay>\n" + m["text"] + "\n</oversight_relay>")
+    return "<human_overseer_message>\n" + m["text"] + "\n</human_overseer_message>"
+
+
+ctx = "\n\n".join(_wrap(m) for m in msgs)
+if any(m.get("kind") == "relay" for m in msgs):
+    head = ("The oversight layer watching this task sent you the following. It can see the other "
+            "agents' checkouts and you cannot. Act on it alongside your current plan.")
+else:
+    head = ("A human overseeing this task sent you the following. It takes priority over your "
+            "current plan where they conflict.")
+ctx = head + "\n\n" + ctx
 out = {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": ctx}}
 if notice:
     out["systemMessage"] = notice

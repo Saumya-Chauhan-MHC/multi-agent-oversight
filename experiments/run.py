@@ -2,8 +2,8 @@
 """One run of one scenario, scored. See harness/runner.py for the flags every scenario shares and
 <scenario>/scenario.py for its own.
 
-  .venv/bin/python run.py port_kill --pref plain --model claude-sonnet-4-5-20250929 --rep 0
-  .venv/bin/python run.py stale_merge --task input_cap --dummy blind
+  .venv/bin/python run.py real_divergence --instance django__django-11211 --model claude-sonnet-4-5-20250929 --ask A --rep 0
+  .venv/bin/python run.py swechat --task mkdocs_warning --model claude-sonnet-4-5-20250929 --ask real --rep 0
   .venv/bin/python run.py delegation_laundering --instance django__django-16032 --cond multi --prompt plain \
       --model claude-sonnet-4-5-20250929 --exp sonnet45_plain --oversight --answer no
   .venv/bin/python run.py <scenario> --help

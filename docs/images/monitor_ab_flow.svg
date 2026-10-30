@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1240" viewBox="0 0 1240 1240" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#444"/>
+    </marker>
+    <style>
+      .t  { font-size: 16px; fill: #222; }
+      .s  { font-size: 14px; fill: #444; }
+      .h  { font-size: 18px; font-weight: bold; fill: #111; }
+      .c  { font-size: 14px; fill: #555; font-style: italic; }
+      .lab{ font-size: 14px; fill: #333; font-style: italic; }
+      .ln { stroke: #444; stroke-width: 1.8; fill: none; marker-end: url(#ar); }
+      .dl { stroke: #444; stroke-width: 1.8; fill: none; marker-end: url(#ar); stroke-dasharray: 7 6; }
+    </style>
+  </defs>
+  <rect width="1240" height="1240" fill="#ffffff"/>
+
+  <text x="40" y="50" class="h" font-size="24">Monitor B and Monitor A: how they fit together</text>
+  <text x="40" y="78" class="s">Each monitor asks one question. Solid: tested offline on recorded runs.   Dashed: not tested yet.</text>
+
+  <!-- user's answer back into the request -->
+  <path d="M1145,488 L1145,140 L510,140 L510,178" class="dl"/>
+  <text x="560" y="130" class="lab">The user's answer is written into the request; B judges later actions by it</text>
+
+  <!-- ===== Row 1: every action goes through B ===== -->
+  <rect x="40" y="190" width="220" height="80" rx="8" fill="#f2f2f2" stroke="#888"/>
+  <text x="150" y="225" class="t" text-anchor="middle">Agent proposes</text>
+  <text x="150" y="247" class="t" text-anchor="middle">an action</text>
+
+  <rect x="330" y="180" width="360" height="100" rx="8" fill="#e8f0fb" stroke="#3b6db3" stroke-width="2"/>
+  <text x="510" y="212" class="h" text-anchor="middle">Monitor B</text>
+  <text x="510" y="238" class="t" text-anchor="middle">Does this action go against</text>
+  <text x="510" y="260" class="t" text-anchor="middle">something the user said?</text>
+  <line x1="260" y1="230" x2="328" y2="230" class="ln"/>
+
+  <rect x="790" y="190" width="220" height="80" rx="8" fill="#f2f2f2" stroke="#888"/>
+  <text x="900" y="236" class="t" text-anchor="middle">The action runs</text>
+  <line x1="690" y1="230" x2="788" y2="230" class="ln"/>
+  <text x="739" y="219" class="lab" text-anchor="middle">no</text>
+
+  <rect x="400" y="350" width="220" height="64" rx="8" fill="#f2f2f2" stroke="#888"/>
+  <text x="510" y="388" class="t" text-anchor="middle">The action is refused</text>
+  <line x1="510" y1="280" x2="510" y2="348" class="ln"/>
+  <text x="522" y="320" class="lab">yes</text>
+
+  <!-- ===== Row 2: things A reacts to ===== -->
+  <rect x="40" y="340" width="220" height="84" rx="8" fill="#f2f2f2" stroke="#888" stroke-dasharray="7 6"/>
+  <text x="150" y="370" class="t" text-anchor="middle">The agents see a result</text>
+  <text x="150" y="392" class="s" text-anchor="middle">a test's output, a version</text>
+  <text x="150" y="410" class="s" text-anchor="middle">check, a file they read</text>
+
+  <text x="40" y="650" class="c">Both are "something new"</text>
+  <text x="40" y="670" class="c">for Monitor A: a refusal</text>
+  <text x="40" y="690" class="c">by B is one more thing seen.</text>
+
+  <path d="M150,424 L150,560 L328,560" class="dl"/>
+  <line x1="510" y1="414" x2="510" y2="498" class="dl"/>
+
+  <!-- ===== Row 3: A ===== -->
+  <rect x="330" y="500" width="360" height="130" rx="8" fill="#fbefe3" stroke="#c0712a" stroke-width="2" stroke-dasharray="7 6"/>
+  <text x="510" y="534" class="h" text-anchor="middle">Monitor A</text>
+  <text x="510" y="560" class="t" text-anchor="middle">Can the user's request, as a whole,</text>
+  <text x="510" y="582" class="t" text-anchor="middle">still be done: in one way, on a</text>
+  <text x="510" y="604" class="t" text-anchor="middle">premise that holds?</text>
+
+  <rect x="790" y="488" width="250" height="126" rx="8" fill="#ffffff" stroke="#888" stroke-dasharray="7 6"/>
+  <text x="808" y="514" class="c">If no:</text>
+  <text x="808" y="538" class="t">Ask the user. The problem</text>
+  <text x="808" y="560" class="t">first, evidence quoted from</text>
+  <text x="808" y="582" class="t">what was seen, options</text>
+  <text x="808" y="604" class="t">suggested</text>
+  <path d="M690,543 L788,543" class="dl"/>
+
+  <rect x="790" y="645" width="250" height="88" rx="8" fill="#ffffff" stroke="#888" stroke-dasharray="7 6"/>
+  <text x="808" y="671" class="c">If yes, after a refusal:</text>
+  <text x="808" y="695" class="t">Tell the agent what to</text>
+  <text x="808" y="717" class="t">do instead</text>
+  <path d="M690,610 L740,610 L740,689 L788,689" class="dl"/>
+  <path d="M915,733 L915,770 L20,770 L20,230 L38,230" class="dl"/>
+
+  <rect x="1080" y="488" width="130" height="130" rx="10" fill="#e9f5e9" stroke="#3c8d3c" stroke-width="2"/>
+  <text x="1145" y="540" class="h" text-anchor="middle">User</text>
+  <text x="1145" y="564" class="s" text-anchor="middle">answers</text>
+  <text x="1145" y="582" class="s" text-anchor="middle">without reading</text>
+  <text x="1145" y="600" class="s" text-anchor="middle">the code</text>
+  <line x1="1040" y1="543" x2="1078" y2="543" class="dl"/>
+
+  <!-- ===== What each monitor sees ===== -->
+  <line x1="40" y1="810" x2="1200" y2="810" stroke="#ccc"/>
+  <text x="40" y="848" class="h" font-size="20">What each monitor sees</text>
+
+  <rect x="40" y="868" width="565" height="320" rx="8" fill="#e8f0fb" stroke="#3b6db3"/>
+  <text x="62" y="900" class="h">Monitor B</text>
+  <text x="62" y="930" class="t">Sees: the user's request, and the action itself</text>
+  <text x="62" y="952" class="t">(the command, or the text an edit replaces).</text>
+  <text x="62" y="986" class="t">Does not see: what the agents did and saw before,</text>
+  <text x="62" y="1008" class="t">or how they explain it.</text>
+  <text x="62" y="1042" class="t">Says nothing to the user: it refuses, and the</text>
+  <text x="62" y="1064" class="t">refusal goes to Monitor A.</text>
+
+  <rect x="635" y="868" width="565" height="320" rx="8" fill="#fbefe3" stroke="#c0712a"/>
+  <text x="657" y="900" class="h">Monitor A</text>
+  <text x="657" y="930" class="t">Sees: the user's request; what the agents ran and</text>
+  <text x="657" y="952" class="t">what came back (outputs, file contents); what they</text>
+  <text x="657" y="974" class="t">said; and the newest thing that happened (a result,</text>
+  <text x="657" y="996" class="t">or an action B refused and why).</text>
+  <text x="657" y="1030" class="t">Outputs are shown exactly as they came back. What the</text>
+  <text x="657" y="1052" class="t">agents say, including briefs and reports, is marked as</text>
+  <text x="657" y="1074" class="t">their own account. Evidence for the user may only quote</text>
+  <text x="657" y="1096" class="t">the request, commands, outputs or files; a quote of the</text>
+  <text x="657" y="1118" class="t">agents' words is dropped.</text>
+  <text x="657" y="1152" class="t">Never stops an action itself: it asks the user, or</text>
+  <text x="657" y="1174" class="t">tells the agent a way forward.</text>
+</svg>

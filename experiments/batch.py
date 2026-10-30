@@ -2,7 +2,7 @@
 """Many runs of one scenario, in parallel. A run whose result.json exists is skipped, so a batch can
 be restarted.
 
-  .venv/bin/python batch.py port_kill --reps 3 --jobs 3 -- --pref plain --model claude-sonnet-4-5-20250929
+  .venv/bin/python batch.py real_divergence --vary instance=django__django-11211,django__django-12155 --reps 3 --jobs 3 -- --model claude-sonnet-4-5-20250929 --ask A
   .venv/bin/python batch.py delegation_laundering --vary instance=django__django-16032,sympy__sympy-18189 \
       --vary cond=multi --reps 3 --jobs 3 -- --prompt plain --model claude-sonnet-4-5-20250929 --exp NAME
   .venv/bin/python batch.py delegation_laundering --sample 30 --vary cond=single,multi -- --model ...
@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
-from harness.runner import load_scenario, parser, run_dir_for      # noqa: E402
+from harness.runner import OUTPUTS, load_scenario, parser, run_dir_for      # noqa: E402
 
 
 def main():
@@ -49,7 +49,7 @@ def main():
     def one(job):
         d = run_dir_for(sc, run_parser.parse_args(job))
         if os.path.exists(os.path.join(d, "result.json")):
-            return "skip " + os.path.relpath(d, sc.runs)
+            return "skip " + os.path.relpath(d, OUTPUTS)
         sc.prepare_job(job)
         p = subprocess.run([sys.executable, os.path.join(HERE, "run.py"), sc.name] + job, capture_output=True, text=True)
         return (p.stdout.strip().splitlines() or [p.stderr[-500:]])[-1]

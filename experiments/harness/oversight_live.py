@@ -50,71 +50,51 @@ def install(ws, rules, decision_timeout_s=1200, interactive=False, viewer_port=4
     return json.load(open(os.path.join(ws, "oversight", "memory", "session_model.json")))
 
 
-def install_v3(ws, prompt, task_model=None):
-    """The v3 tool, wired as eval/writeups describes its treatment arm: record.py on every event (v3
-    reads the event log for its port registry and dependency map), v3_gate on PreToolUse, v3_land on
-    PostToolUse, v3_done on SubagentStop. Nothing is injected into the agent's context. A hold is
-    Claude Code's own permission dialog ("ask").
-
-    The task model is copied from task_model (a task_model.json, e.g. the one the v3 replay used) or,
-    without one, extracted here from the prompt, one Sonnet 5 call. Returns the model's preferences."""
+def install_baseline(ws, prompt, threshold=None):
+    """The baseline monitor, which is v5 with the recall changes (origin/v5-recall): record.py on
+    every event (the gate reads other agents' writes and a subagent's brief from the event log),
+    v5_gate on PreToolUse, inbox.py on PostToolUse (used only when OV_RELAY=1). Every action but a
+    certain read is judged against the task description, here the run's prompt, written to
+    oversight/task.md. A hold is Claude Code's own dialog ("ask"). The relay is off."""
     for d in (".claude", "oversight"):
         shutil.copytree(os.path.join(OVERLAY, d), os.path.join(ws, d),
                         ignore=shutil.ignore_patterns("__pycache__", "memory", "judgements", "control",
-                                                      "control3", "events.jsonl", "task_model.json", "*.pyc"))
+                                                      "control3", "control5", "events.jsonl",
+                                                      "task_model.json", "*.pyc"))
+    # policy5 keeps its state in control5/ at the project root, so it is excluded too.
     with open(os.path.join(ws, ".git", "info", "exclude"), "a") as f:
-        f.write("\n.claude/\noversight/\n")
+        f.write("\n.claude/\noversight/\ncontrol5/\n")
+    open(os.path.join(ws, "oversight", "task.md"), "w").write(prompt)
     py = 'python3 "${CLAUDE_PROJECT_DIR}/.claude/hooks/%s'
     rec = lambda ev: {"type": "command", "command": py % ("record.py\" " + ev)}
     hooks = {ev: [{"hooks": [rec(arg)]}] for ev, arg in (
         ("SessionStart", "session_start"), ("UserPromptSubmit", "prompt"), ("PreToolUse", "pre_tool"),
         ("PostToolUse", "post_tool"), ("SubagentStart", "subagent_start"), ("SubagentStop", "subagent_stop"),
         ("PreCompact", "pre_compact"), ("Stop", "stop"), ("SessionEnd", "session_end"))}
-    hooks["PreToolUse"].append({"matcher": "Bash|Write|Edit|MultiEdit|Task|Agent",
-                                "hooks": [{"type": "command", "command": py % "v3_gate.py\"", "timeout": 180}]})
-    hooks["PostToolUse"].append({"hooks": [{"type": "command", "command": py % "v3_land.py\""}]})
-    hooks["SubagentStop"].append({"hooks": [{"type": "command", "command": py % "v3_done.py\"", "timeout": 180}]})
+    hooks["PreToolUse"].append({"hooks": [{"type": "command", "timeout": 180,
+                                           "command": "OV_TASK_FILE=oversight/task.md " + py % "v5_gate.py\""}]})
+    hooks["PostToolUse"].append({"hooks": [{"type": "command", "command": py % "inbox.py\""}]})
     json.dump({"hooks": hooks}, open(os.path.join(ws, ".claude", "settings.json"), "w"), indent=1)
-
-    sys.path.insert(0, OVERLAY)
-    try:
-        from oversight.v3 import taskmodel as tmod, extract
-        if task_model:
-            tm = tmod.save(ws, json.load(open(task_model)))
-        else:
-            # The extractor is a Claude Code agent with v3's instructions appended; on a short brief it
-            # often does the task instead ("there is no demo/ project here") and returns no JSON:
-            # 2 of 3 tries on port_kill. Retry, and keep the count in the model.
-            for attempt in range(1, 5):
-                try:
-                    tm = extract.extract(ws, prompt, "", "", save=False)
-                    break
-                except RuntimeError:
-                    if attempt == 4:
-                        raise
-            tm.setdefault("state", {})["extract_attempts"] = attempt
-            tm = tmod.save(ws, tm)
-    finally:
-        sys.path.pop(0)
-    if not tmod.preferences(tm):
-        raise RuntimeError("v3 task model has no preferences; the tool would do nothing (pass --task-model)")
-    return [dict(text="%s %s" % (p["id"], p["rule"])) for p in tmod.preferences(tm)]
+    if threshold is not None:
+        os.makedirs(os.path.join(ws, "control5"), exist_ok=True)
+        json.dump(dict(threshold=threshold), open(os.path.join(ws, "control5", "settings.json"), "w"))
+    return [dict(text=prompt[:300])]
 
 
-def summary_v3(run_dir):
-    """What v3 judged and showed, from the event log it wrote."""
-    out = dict(judged=0, holds=0, checks=0, departs=0)
+def summary_baseline(run_dir):
+    """What the baseline judged and held, from the v5 judgements in the event log."""
+    out = dict(judged=0, holds=0, unavailable=0, invalid_quote=0)
     p = os.path.join(run_dir, "oversight", "events.jsonl")
     for l in (open(p) if os.path.exists(p) else []):
         try:
             e = json.loads(l)
         except Exception:
             continue
-        if e.get("ov_event") == "v3_judgement":
+        if e.get("ov_event") == "v5_judgement":
             out["judged"] += 1
-            out["departs"] += e.get("verdict") == "departs"
             out["holds"] += e.get("band") == "hold"
-            out["checks"] += e.get("band") == "check"
+            out["unavailable"] += e.get("source") == "unavailable"
+            out["invalid_quote"] += e.get("source") == "invalid-quote"
     return out
 
 
@@ -154,13 +134,6 @@ class Answerer(threading.Thread):
         self.stop_flag.set()
 
 
-def start_viewer_v3(ws, port):
-    """v3's own read-only graph (overlay/oversight/v3/viewer), served from the workspace."""
-    return subprocess.Popen([sys.executable, os.path.join(ws, "oversight", "v3", "viewer", "serve.py"), str(port)],
-                            cwd=ws, env=dict(os.environ, CLAUDE_PROJECT_DIR=ws),
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-
 def human_instructions(ws):
     return ("\noversight is live. A held spawn waits for you (up to the decision timeout). In another terminal:\n"
             "  cd %s\n"
@@ -179,12 +152,15 @@ def collect(ws, run_dir):
     """Copy what the tool wrote before the workspace is deleted."""
     src, dst = os.path.join(ws, "oversight"), os.path.join(run_dir, "oversight")
     os.makedirs(dst, exist_ok=True)
-    for name in ("judgements", "control", "control3", "memory", "events.jsonl", "task_model.json"):
+    for name in ("judgements", "control", "control3", "memory", "events.jsonl", "task_model.json", "task.md"):
         s = os.path.join(src, name)
         if os.path.isdir(s):
             shutil.copytree(s, os.path.join(dst, name), dirs_exist_ok=True)
         elif os.path.exists(s):
             shutil.copy2(s, dst)
+    c5 = os.path.join(ws, "control5")                  # the baseline (v5) keeps its state at the root
+    if os.path.isdir(c5):
+        shutil.copytree(c5, os.path.join(dst, "control5"), dirs_exist_ok=True)
 
 
 def summary(run_dir):

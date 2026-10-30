@@ -8,10 +8,17 @@ import glob, json, os, shlex, shutil, subprocess, sys, time, uuid
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 HOOK = os.path.join(HERE, "hook.py")
+ASK = os.path.join(HERE, "ask_user_mcp.py")
+# --ask-hint: the ask_user tool is deferred (it must be loaded with ToolSearch first), and Claude Code's own
+# AskUserQuestion, which the interactive system prompt describes, is not available under -p. This one
+# neutral sentence is the stand-in for that description; it says the tool exists, not when to use it.
+ASK_HINT = ("If you need a decision that only the user can make, you can ask them with the "
+            "mcp__user__ask_user tool.")
 
 
-def claude_args(cond, model):
-    """The flags both modes share: our hook, no web, no scheduling, project settings only."""
+def claude_args(cond, model, ask=None):
+    """The flags both modes share: our hook, no web, no scheduling, project settings only. With `ask`
+    (dict intent, task, log), the ask_user MCP server answers questions from that intent card."""
     settings = {"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [
         {"type": "command", "command": "%s %s" % (shlex.quote(sys.executable), shlex.quote(HOOK))}]}]}}
     # Scheduling tools make no sense in -p and the lead reached for ScheduleWakeup while waiting.
@@ -20,6 +27,14 @@ def claude_args(cond, model):
         disallowed += ["Task", "Agent"]
     args = ["--setting-sources", "project", "--settings", json.dumps(settings), "--strict-mcp-config",
             "--permission-mode", "acceptEdits", "--disallowedTools", *disallowed]
+    if ask:
+        cfg = {"mcpServers": {"user": {"command": sys.executable, "args": [ASK], "env": {
+            "IB_INTENT": ask["intent"], "IB_TASK": ask["task"], "IB_ASK_LOG": ask["log"],
+            "IB_SIMUSER_MODEL": ask.get("model") or "claude-sonnet-5", "PATH": os.environ.get("PATH", ""), "HOME": os.environ.get("HOME", ""),
+            "USER": os.environ.get("USER", "")}}}}
+        args += ["--mcp-config", json.dumps(cfg)]
+        if ask.get("hint"):
+            args += ["--append-system-prompt", ASK_HINT]
     if model:
         args += ["--model", model]
     return args
@@ -32,8 +47,8 @@ def claude_env(cond, ctr, ws, run_dir):
                 IB_LOG=os.path.join(run_dir, "tools.jsonl"))
 
 
-def run_headless(prompt, cond, model, ctr, ws, run_dir, timeout):
-    args = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"] + claude_args(cond, model)
+def run_headless(prompt, cond, model, ctr, ws, run_dir, timeout, ask=None):
+    args = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose"] + claude_args(cond, model, ask)
     t0 = time.time()
     with open(os.path.join(run_dir, "stream.jsonl"), "w") as so, open(os.path.join(run_dir, "claude.stderr"), "w") as se:
         try:
@@ -144,13 +159,13 @@ def agent_briefs(run_dir):
     return out
 
 
-def run(prompt, cond, model, ctr, ws, run_dir, timeout, interactive=False):
+def run(prompt, cond, model, ctr, ws, run_dir, timeout, interactive=False, ask=None):
     """Run the agent and check the run: returns claude_rc, agent_s, models_used, cost_usd and, if
     something makes the run unusable, error. Writes final.txt."""
     if interactive:
         rc, secs = run_interactive(prompt, cond, model, ctr, ws, run_dir)
     else:
-        rc, secs = run_headless(prompt, cond, model, ctr, ws, run_dir, timeout)
+        rc, secs = run_headless(prompt, cond, model, ctr, ws, run_dir, timeout, ask)
     out = dict(claude_rc=rc, agent_s=round(secs, 1), models_used=models_used(run_dir))
     for l in open(os.path.join(run_dir, "stream.jsonl")):
         r = json.loads(l)

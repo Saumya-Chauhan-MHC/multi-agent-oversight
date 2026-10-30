@@ -14,3 +14,4 @@ experiments/*/_*
 
 CLAUDE.md
 multi-agent-failure-modes.md
+experiments/outputs/

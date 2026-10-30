@@ -15,6 +15,7 @@ The scenario gives the user's lines (Scenario.oversight_lines) and the ground tr
 import json, os, re, sys
 
 from . import claude
+from .runner import OUTPUTS
 
 OVERSIGHT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))),
                          "overlay", "oversight")
@@ -141,7 +142,7 @@ def replay(sc, run, variant="default", spawns_only=False, count_only=False):
             events.append(dict(e, band=b, verdict=v.get("verdict"), confidence=v.get("confidence"),
                                evidence=v.get("evidence"), source=v.get("source")))
 
-    out = dict(run=os.path.relpath(run, sc.runs), variant=variant, lines=[m["text"] for m in model], events=events)
+    out = dict(run=os.path.relpath(run, OUTPUTS), variant=variant, lines=[m["text"] for m in model], events=events)
     if not count_only:
         json.dump(out, open(os.path.join(run, out_name(variant)), "w"), indent=1)
     return out
