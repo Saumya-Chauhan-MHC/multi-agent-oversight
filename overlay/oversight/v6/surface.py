@@ -145,18 +145,29 @@ def notice(item):
         L.append("  rule:           %s %s" % (m["category"], m["extends"]))
         L.append("  evidence:       %s" % _evidence(m))
         L.append("  cost if kept:   %s (%s)" % (m["costs"], m["metric"]))
-        if m.get("ask"):
-            L.append("  question:       %s" % m["ask"])
-        else:
-            # No permission question for this one: the fact is the whole finding.
+        # The judge's answer, not the judge's question. The question is fixed per risk, so after
+        # the first time it is read it carries nothing: it is the prompt the judge was given,
+        # and printing a prompt to the developer tells them what was asked and not what was
+        # found. Its answer was being computed, stored on the finding and then dropped here.
+        if m.get("judge_why"):
+            L.append("  no reason found: %s" % m["judge_why"])
+        elif not m.get("ask"):
             L.append("  correction:     %s" % (m.get("correction") or
                                                "announce the change before it lands"))
         L.append("  detector after: %s" % m["source"])
     else:
         L.append("[oversight · preference] %s" % (m.get("category") or ""))
         L.append("  action:         %s" % str(m.get("action", ""))[:100].replace("\n", " "))
-        L.append("  preference:     %s" % m.get("rule", m.get("detail")))
-        L.append("  evidence:       %s" % _evidence(m))
+        # `said` is the judge's verbatim quote from the preference, checked against the rule
+        # before it gets here. Everything the judge produced was being computed and discarded:
+        # the notice showed only the rule text, which the developer already wrote.
+        L.append("  your rule says: %s" % (m.get("said") or m.get("rule") or m.get("detail")))
+        if m.get("does"):
+            L.append("  this does:      %s" % str(m["does"])[:140])
+        if m.get("why"):
+            L.append("  why it departs: %s" % str(m["why"])[:180])
+        if m.get("correction"):
+            L.append("  instead:        %s" % str(m["correction"])[:180])
         L.append("  your call:      accept the flag, or reject it and say why")
     if len(item["members"]) > 1:
         L.append("  also, same kind:")

@@ -204,11 +204,25 @@ check("reading an interface is not changing it",
 
 # ---- 8. the notice carries the SSOT's fields ------------------------------------------------
 n = surface.notice(dict(channel="safety", key="k", members=[SAFE]))
-for field in ("what happened", "rule", "evidence", "cost if kept", "question", "detector after"):
+for field in ("what happened", "rule", "evidence", "cost if kept", "detector after"):
     check("safety notice shows %s" % field, field in n)
 n = surface.notice(dict(channel="preference", key="k", members=[PREF]))
-for field in ("action", "preference", "evidence", "your call"):
+for field in ("action", "your rule says", "your call"):
     check("preference notice shows %s" % field, field in n)
+
+# What the judge produced was being computed and thrown away at the last step.
+rich = dict(PREF, said="one storage module", does="opens its own sqlite connection",
+            why="bypasses the shared store", correction="call store.put instead")
+n = surface.notice(dict(channel="preference", key="k", members=[rich]))
+for field in ("one storage module", "opens its own sqlite", "bypasses the shared store",
+              "call store.put instead"):
+    check("the judge's %r reaches the developer" % field[:22], field in n)
+
+sf = safety.classify(dict(risk="collusion", reason="graded_file", detail="t.py"))
+sf["judge_why"] = "its brief gave it app/, not tests/"
+n = surface.notice(dict(channel="safety", key="k", members=[sf]))
+check("a safety notice shows the judge's answer", "its brief gave it app/" in n)
+check("and not the fixed question it was asked", "Wanting it to pass" not in n)
 
 # ---- 9. the alignment check between detection and surfacing --------------------------------
 # Regression: the first live run surfaced the raw word-overlap path with no judge. 69 flags in
