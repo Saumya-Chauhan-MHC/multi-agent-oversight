@@ -93,7 +93,13 @@ def main():
     ap.add_argument("--dag", action="store_true",
                     help="serve the graph at the end and open it, for a recording")
     ap.add_argument("--port", type=int, default=8790)
+    ap.add_argument("--quiet", type=int, default=0,
+                    help="quiet window in seconds. the real setting is 600; a walkthrough sets "
+                         "it to about 60 so the wait can be watched rather than described")
     a = ap.parse_args()
+    if a.quiet:
+        os.environ["OV_QUIET_S"] = str(a.quiet)      # the gate subprocess inherits this
+        surface.QUIET_S = a.quiet
     proj = tempfile.mkdtemp(prefix="v6live_")
     P = a.pace
 
@@ -106,7 +112,9 @@ def main():
         print("%s%s%s" % (G, "─" * 76, X))
 
     print("\033[2J\033[H", end="")
-    print("%sv6 oversight — monitor, queue, 10-minute window, DAG%s" % (B, X))
+    print("%sv6 oversight — monitor, queue, quiet window, feedback loop, DAG%s" % (B, X))
+    print("%squiet window set to %ds for this walkthrough (the real setting is 600)%s"
+          % (D, surface.QUIET_S, X))
     print("%s%s%s" % (D, proj, X))
     beat()
 
@@ -168,7 +176,31 @@ def main():
     print("   %s  contract, no later answer repairs it%s" % (D, X))
     beat(2)
 
-    hr("6 · a preference flag, and the answer that moves the rule")
+    hr("6 · the wait. nothing is dropped, it is held until the window closes")
+    left = surface.remaining(proj, "safety")
+    print("   %sthe queue is holding:%s" % (D, X))
+    for item in json.load(open(os.path.join(proj, surface.DIR, "queue_safety.json"))):
+        print("     %s%-40s%s %d request(s)" % (Y, item["key"], X, len(item["members"])))
+    print()
+    while True:
+        left = surface.remaining(proj, "safety")
+        if left <= 0:
+            break
+        bar = "█" * int(24 * (1 - left / float(surface.QUIET_S)))
+        sys.stdout.write("\r   quiet window  %-24s %3ds left " % (bar, left))
+        sys.stdout.flush()
+        time.sleep(1)
+    print("\r   quiet window  %-24s closed      " % ("█" * 24))
+    beat()
+    nxt = surface.next_to_show(proj)
+    if nxt:
+        print("\n   %s→ the held flag now surfaces, oldest first%s" % (D, X))
+        print("%s%s%s" % (R, surface.notice(nxt), X))
+        surface.mark_shown(proj, nxt["channel"])
+        surface.pop(proj, nxt["channel"], nxt["key"])
+    beat(2)
+
+    hr("7 · a preference flag, and the answer that moves the rule")
     before = next(p["rule"] for p in tmod.preferences(tmod.load(proj)) if p["category"] == "P2")
     out = fire(proj, "Write", {"file_path": "app/comments.py",
                                "content": "import sqlite3\n"
@@ -186,7 +218,15 @@ def main():
         print("   %snow: %s%s" % (G, after[:110], X))
     beat(2)
 
-    hr("7 · what is still waiting, and the graph")
+    hr("8 · the two channels hold their own windows, separately")
+    print("   %ssafety     %3ds left%s" % (D, surface.remaining(proj, "safety"), X))
+    print("   %spreference %3ds left%s" % (D, surface.remaining(proj, "preference"), X))
+    print("   %sa preference answer does not silence a safety finding, and the other way"
+          % D)
+    print("   round. they are ranked within a channel, never against each other.%s" % X)
+    beat(2)
+
+    hr("9 · what is still waiting, and the graph")
     print("   queue depths: %s" % (surface.depths(proj),))
     ev = [json.loads(l) for l in open(os.path.join(proj, "oversight", "events.jsonl"))
           if l.strip().startswith("{")]
@@ -194,7 +234,7 @@ def main():
     c = Counter(e.get("ov_event") for e in ev if str(e.get("ov_event")).startswith("v6"))
     print("   events: %s" % dict(c))
     if a.dag:
-        hr("8 · the DAG: who built on what, and where the findings landed")
+        hr("10 · the DAG: who built on what, and where the findings landed")
         env = dict(os.environ, CLAUDE_PROJECT_DIR=proj)
         srv = subprocess.Popen(
             [sys.executable, os.path.join(OVERLAY, "oversight", "v6", "viewer", "serve.py"),
@@ -204,7 +244,7 @@ def main():
         url = "http://127.0.0.1:%d/" % a.port
         print("   %sserving %s%s" % (D, url, X))
         subprocess.run(["open", url])
-        beat(9)
+        beat(22)
         srv.terminate()
     else:
         print("\n   %sDAG:%s CLAUDE_PROJECT_DIR=%s \\" % (B, X, proj))

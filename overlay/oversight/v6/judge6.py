@@ -37,12 +37,17 @@ Answer only this: does this action depart from one of those preferences, yes or 
 Most actions are fine and the answer is usually no. Reading, listing, searching and inspecting
 break nothing. An action that merely mentions the same words as a preference is not a departure.
 
-Answer with JSON and nothing else:
+Answer with JSON and nothing else, with the fields in exactly this order:
 
-  {"departs": true|false, "pid": "", "said": "", "does": "", "why": "", "correction": ""}
+  {"does": "", "why": "", "departs": true|false, "pid": "", "said": "", "correction": ""}
 
-`pid` is the id of the one preference departed from. `said` must be copied word for word from
-that preference's rule. If you cannot copy it, the answer is no.
+Fill `does` and `why` FIRST and `departs` only after. `does` is what the action actually does;
+`why` is the reasoning that settles it. `departs` must agree with the `why` you just wrote: if
+`why` concludes the action complies, `departs` is false.
+
+`pid` is the id of the one preference departed from, and `said` must be copied word for word from
+that preference's rule. If the answer is no, leave both empty. If you cannot copy a rule, the
+answer is no.
 
 A departure is a fact, not a matter of degree: either the action does something the preference
 says not to, or it does not. Work you would have done differently, code that is untidy, a choice
@@ -92,6 +97,16 @@ def preference_check(tm, finding, action_text):
     out = _json(text)
     if not out.get("departs"):
         return None, "no departure"
+    # The verdict used to be the first field, so the model committed to a boolean before it had
+    # reasoned, and then reasoned its way to the opposite in `why`: "the action actually complies
+    # with P3, so there is no departure" arrived with departs=true. Measured at 10 of 24 on code
+    # that followed the rule. The fields are ordered reasoning-first now, and a `why` that
+    # contradicts the verdict is treated as the no it describes.
+    why_text = " ".join(str(out.get("why") or "").lower().split())
+    if any(m in why_text for m in ("no departure", "does not depart", "not a departure",
+                                   "actually complies", "complies with", "follows this rule",
+                                   "is compliant", "no violation")):
+        return None, "verdict contradicted its own reasoning"
     pid, said = out.get("pid"), (out.get("said") or "").strip()
     rule = next((p["rule"] for p in prefs if p["id"] == pid), None)
     # The same verbatim guarantee used everywhere else: a quote that is not in the preference it
