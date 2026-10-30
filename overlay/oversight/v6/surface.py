@@ -90,6 +90,13 @@ def quiet_until(proj, ch):
     return _read(proj, "quiet.json", {}).get(ch, 0)
 
 
+def remaining(proj, ch, now=None):
+    """Seconds left in the quiet window. Shown rather than waited out: a demo that sat for the
+    full ten minutes would prove the same thing and be unwatchable."""
+    now = time.time() if now is None else now
+    return max(0, int(quiet_until(proj, ch) - now))
+
+
 def mark_shown(proj, ch):
     q = _read(proj, "quiet.json", {})
     q[ch] = time.time() + QUIET_S
