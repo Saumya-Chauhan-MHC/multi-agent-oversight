@@ -44,10 +44,29 @@ tool, ti = data.get("tool_name"), (data.get("tool_input") or {})
 if tool not in ("Bash", "Write", "Edit", "MultiEdit", "Task", "Agent"):
     sys.exit(0)
 
+# Still open (swe3 round 2). A shown notice stays visible, without interrupting again, on every later
+# action until the run ends: the user sees the agent keep working while the concern is unanswered.
+# One interruption per item is unchanged; this only repeats the line next to later actions.
+OPEN = os.path.join(surface.ctl(PROJ), "open.json")
+if os.path.exists(OPEN):
+    try:
+        _open = json.load(open(OPEN))
+    except Exception:
+        _open = []
+    if _open:
+        align.append_event(PROJ, dict(ov_event="v6_still_open", items=_open))
+        _STILL = "Still open: " + " | ".join("%s on %s" % (o.get("pid") or o.get("risk") or o.get("kind"), o.get("action")) for o in _open)
+    else:
+        _STILL = None
+else:
+    _STILL = None
+
 # Reading breaks nothing. v5 already worked out which shell commands can change the repository
 # and which cannot, so that list is reused rather than written again. Without this the first live
 # run put 69 flags on the board, every one of them the word "user" appearing in a `find`.
 if tool == "Bash" and context.read_only_command(ti.get("command")):
+    if _STILL:
+        print(json.dumps({"systemMessage": _STILL}))
     sys.exit(0)
 
 tm = tmod.load(PROJ)
@@ -63,7 +82,7 @@ if not found:
 
 found["agent"] = who
 action_text = json.dumps({k: v for k, v in ti.items() if isinstance(v, str)})[:1800]
-found["action"] = str(ti.get("command") or ti.get("file_path") or "")[:200]
+found["action"] = safety.action_target(tool, ti)
 align.append_event(PROJ, dict(ov_event="v6_finding", agent=who, kind=found["kind"],
                               risk=found.get("risk"), reason=found.get("reason"),
                               detail=str(found.get("detail"))[:200]))
@@ -74,7 +93,7 @@ if found["kind"] == "preference":
     found, why = judge6.preference_check(tm, found, action_text)
     align.append_event(PROJ, dict(ov_event="v6_judged", agent=who, kind="preference",
                                   departs=bool(found), why=why,
-                                  pid=(found or {}).get("pid"),
+                                  pid=(found or {}).get("pid"), pids=(found or {}).get("pids"),
                                   said=((found or {}).get("said") or "")[:160]))
     if not found:
         sys.exit(0)
@@ -111,6 +130,13 @@ align.append_event(PROJ, dict(ov_event="v6_surfaced", channel=item["channel"], k
 # Record what was just asked, so the next thing the developer types can be paired with it.
 # Without this the answer has nowhere to land and the preference model never moves.
 head = item["members"][0]
+try:
+    _cur = json.load(open(OPEN)) if os.path.exists(OPEN) else []
+except Exception:
+    _cur = []
+_cur.append(dict(key=item["key"], kind=head.get("kind"), pid=head.get("pid"), pids=head.get("pids"), risk=head.get("risk"),
+                 category=head.get("category"), action=head.get("action"), detail=str(head.get("detail") or "")[:200]))
+json.dump(_cur, open(OPEN, "w"))
 json.dump(dict(channel=item["channel"], key=item["key"], pid=head.get("pid"),
                target=head.get("action"), ts=time.time()),
           open(os.path.join(surface.ctl(PROJ), "awaiting.json"), "w"))

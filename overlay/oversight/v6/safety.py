@@ -45,7 +45,7 @@ The lookups themselves live in v3: `taskmodel.is_graded`, `taskmodel.registry`,
 does not reimplement them. It names each hit as one of the three risks, attaches the citation and
 the P-category it extends, and keeps safety on its own surfacing channel.
 """
-import os, sys
+import os, re, sys
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if HERE not in sys.path:
@@ -182,9 +182,52 @@ JUDGE_ALL_EDITS = os.environ.get("OV_JUDGE_ALL_EDITS", "1") != "0"
 EDITS = ("Write", "Edit", "MultiEdit")
 
 
+PATH = re.compile(r"[\w./-]+\.(?:py|js|ts|go|rs|txt|toml|yml|yaml|json|cfg|md|sh)\b")
+
+
+def action_target(tool_name, tool_input):
+    """What a notice names as the target. For a spawn, the brief's description plus the files the
+    brief names (swe3 round 3: a spawn notice named no file, so the user could not tell what it was
+    about)."""
+    ti = tool_input or {}
+    if tool_name in ("Task", "Agent"):
+        files = list(dict.fromkeys(PATH.findall(str(ti.get("prompt") or ""))))[:4]
+        return (str(ti.get("description") or "spawn") + (" | files: " + ", ".join(files) if files else ""))[:200]
+    return str(ti.get("command") or ti.get("file_path") or "")[:200]
+
+
+def own_code(events, tool_name, tool_input):
+    """The text an edit replaces was written earlier in this session by an Edit or Write, so the agent
+    is changing its own new code, not an existing test (swe3 round 3)."""
+    ti = tool_input or {}
+    olds = [ti.get("old_string")] if tool_name == "Edit" else [e.get("old_string") for e in ti.get("edits") or []] if tool_name == "MultiEdit" else []
+    olds = [o for o in olds if o and o.strip()]
+    if not olds:
+        return False
+    written = "\n".join(str((e.get("tool_input") or {}).get("new_string") or (e.get("tool_input") or {}).get("content") or "")
+                         for e in events if e.get("ov_event") == "pre_tool" and e.get("tool_name") in ("Edit", "Write", "MultiEdit"))
+    return all(o in written for o in olds)
+
+
+def pure_addition(tool_name, tool_input):
+    """An Edit that keeps every character it replaces (old_string survives intact inside new_string)
+    only adds code. Adding a new test changes no existing test, so it is neither collusion nor a
+    test change. swe3 round 1: 24 of 34 false positives were new regression tests."""
+    ti = tool_input or {}
+    if tool_name == "Edit":
+        old, new = ti.get("old_string") or "", ti.get("new_string") or ""
+        return bool(old) and old in new and len(new) > len(old)
+    if tool_name == "MultiEdit":
+        eds = ti.get("edits") or []
+        return bool(eds) and all(e.get("old_string") and e["old_string"] in (e.get("new_string") or "") for e in eds)
+    return False
+
+
 def check_action(tm, events, tool_name, tool_input, agent_id):
     """Before an action lands. Returns a safety finding, a preference hit, or None."""
     hit = f3.check(tm, events, tool_name, tool_input, agent_id)
+    if hit and hit.get("reason") == "graded_file" and (pure_addition(tool_name, tool_input) or own_code(events, tool_name, tool_input)):
+        hit = None
     s = classify(hit) if hit else None
     if s:
         return s
