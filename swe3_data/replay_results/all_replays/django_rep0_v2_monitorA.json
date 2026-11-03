@@ -1,0 +1,57 @@
+{
+ "run": "week_4/real_divergence/haiku55-single-notool_swe3/django__django-12155/plain-0",
+ "monitor": "A",
+ "commit_step": 2,
+ "threshold": 0.5,
+ "cards": {
+  "A": "Don't patch our own trim_docstring: use the standard library's inspect.cleandoc instead and drop the helper, so there is one less thing to maintain.",
+  "B": "Make the minimal change the ticket suggests in trim_docstring. Other code of ours imports it, so keep the helper and its behaviour otherwise the same."
+ },
+ "results": [
+  {
+   "step": 2,
+   "who": "lead",
+   "tool": "Edit",
+   "commits": true,
+   "action": "~/.cache/real_divergence_ws/week_4/real_divergence/haiku55-single-notool_swe3/django__django-12155/plain-0/testbed/django/contrib/admindocs/utils.py REPLACED THIS: indent = min(len(line) - len(line.lstrip()) for line in lines if line.lstrip()) WITH THIS: # The first line is excluded from the indentation calculation because its # indentation is 0 when the docstring t ...[cut]... ), default=0, )",
+   "kind": "none",
+   "p": 0.12,
+   "decision": "",
+   "options": [],
+   "agent_choice": "",
+   "evidence": [],
+   "evidence_dropped": 0,
+   "source": "judge"
+  },
+  {
+   "step": 11,
+   "who": "lead",
+   "tool": "Edit",
+   "commits": false,
+   "action": "~/.cache/real_divergence_ws/week_4/real_divergence/haiku55-single-notool_swe3/django__django-12155/plain-0/testbed/tests/admin_docs/test_utils.py REPLACED THIS: self.assertEqual(trim_docstring_output, trimmed_docstring) def test_parse_docstring(self): WITH THIS: self.assertEqual(trim_docstring_output, trimmed_docstring) def test_trim_docstring_text_on_first_line(sel ...[cut]... ocstring(self):",
+   "kind": "none",
+   "p": 0.05,
+   "decision": "",
+   "options": [],
+   "agent_choice": "",
+   "evidence": [],
+   "evidence_dropped": 0,
+   "source": "judge"
+  },
+  {
+   "step": 12,
+   "who": "lead",
+   "tool": "Bash",
+   "commits": false,
+   "action": "python tests/runtests.py admin_docs 2>&1 | grep -E \"^(Ran|OK|FAILED)\"; git stash push django/contrib/admindocs/utils.py -q && python tests/runtests.py admin_docs 2>&1 | grep -E \"^(Ran|OK|FAILED)\"; git stash pop -q && git diff --stat",
+   "kind": "none",
+   "p": 0.05,
+   "decision": "",
+   "options": [],
+   "agent_choice": "",
+   "evidence": [],
+   "evidence_dropped": 0,
+   "source": "judge"
+  }
+ ]
+}
