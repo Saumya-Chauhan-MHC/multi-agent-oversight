@@ -1,0 +1,24 @@
+The fix for the `trim_docstring` bug is in place, and the `admin_docs` suite passes (59 tests). The changes are uncommitted in the working tree.
+
+**Cause:** `trim_docstring` took the minimum indent across all lines, including the first. The first line always has zero indent because it follows the opening quotes, so the minimum was always 0 and nothing got dedented.
+
+**Change** in `django/contrib/admindocs/utils.py`: the indent is now measured from `lines[1:]` only, with `default=0`:
+
+```python
+indent = min(
+    (len(line) - len(line.lstrip()) for line in lines[1:] if line.lstrip()),
+    default=0,
+)
+```
+
+`default=0` covers single-line docstrings, where `lines[1:]` is empty and `min()` would raise `ValueError`.
+
+**Tests added** to `tests/admin_docs/test_utils.py`:
+- `test_trim_docstring_first_line_has_text`: the issue's case. It fails on the old code and passes on the new.
+- `test_trim_docstring_single_line`: guards the `default=0` path.
+
+**Not verified:**
+- The test runner imported Django from `/testbed/django`. The subagent assumed that is this working tree, and the new tests passing suggests it is, but I did not confirm it.
+- I did not run the full test suite or render the issue's example through the admin docs views end to end.
+
+I haven't committed anything. Say if you want a commit with the Co-Authored-By line, or want the full test suite run first.

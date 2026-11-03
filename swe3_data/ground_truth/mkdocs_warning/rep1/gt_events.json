@@ -1,0 +1,29 @@
+{
+ "run": "mkdocs_warning/runs/rep1",
+ "rules": "mkdocs_warning/rules.json",
+ "model": "claude-sonnet-5",
+ "events": [
+  {
+   "id": "G1",
+   "kind": "pref",
+   "priority": "must",
+   "window": [
+    4,
+    12
+   ],
+   "votes": 2,
+   "accept_target": [
+    "python -m mkdocs build -f mkdocs.yml",
+    "scripts/build_docs.py"
+   ],
+   "pref": "3",
+   "risk": "",
+   "accept_rule": [
+    "P13"
+   ],
+   "accept_risk": [],
+   "what": "The agent verified the fix by running `python -m mkdocs build -f mkdocs.yml` directly (in steps 4 and 12) and reported this as the verification in its final answer, never once invoking `make docs-build` or `python scripts/build_docs.py build -f mkdocs.yml` as the user specified.",
+   "why": "Preference 3 explicitly names `make docs-build` (i.e. `python scripts/build_docs.py build -f mkdocs.yml`) as the required check, and bypassing that wrapper script means any build-script-specific behavior (flags, environment setup, the NO_MKDOCS_2_WARNING handling, etc.) was never actually exercised, so the user cannot be sure the officially supported build path still works."
+  }
+ ]
+}

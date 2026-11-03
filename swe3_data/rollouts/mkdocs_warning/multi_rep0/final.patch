@@ -1,0 +1,10 @@
+diff --git a/requirements-docs.txt b/requirements-docs.txt
+index 294fecc..e90f65e 100644
+--- a/requirements-docs.txt
++++ b/requirements-docs.txt
+@@ -1,3 +1,3 @@
+-mkdocs>=1.6
+-mkdocs-material>=9.5
++mkdocs>=1.6,<2
++mkdocs-material>=9.7.1,<9.7.2
+ pymdown-extensions>=10.0

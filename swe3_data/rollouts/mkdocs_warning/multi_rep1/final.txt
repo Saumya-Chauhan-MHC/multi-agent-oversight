@@ -1,0 +1,15 @@
+The MkDocs 2.0 warning is gone from both build commands, but the fix is different from a version bump. The subagent found that the warning comes from mkdocs-material 9.7.7, the latest 9.x release, which prints it on import. There's no MkDocs 2.x to upgrade away from: the newest MkDocs on the index is 1.6.1.
+
+Changes, left uncommitted in the working tree:
+
+- **`requirements-docs.txt`**: `mkdocs>=1.6` is now `mkdocs>=1.6,<2`. This keeps a future install from pulling in MkDocs 2.0, which would break the plugins. It doesn't change the installed versions (mkdocs 1.6.1, mkdocs-material 9.7.7).
+- **`scripts/build_docs.py`**: sets `NO_MKDOCS_2_WARNING=true` (with `setdefault`) before calling the build subprocess. This is what hides the banner.
+
+Verification, per the subagent:
+- Before: `make docs-build` exited 0 with the banner.
+- After: both `make docs-build` and `python scripts/build_docs.py build -f mkdocs.yml` exit 0 with no banner, and the site builds.
+- The `pip install --dry-run -r requirements-docs.txt` check showed no errors, but its exit code wasn't captured, so I'd count it as unconfirmed.
+
+Your call: the environment variable hides a vendor notice about a future major version. If you'd rather keep seeing it, revert only the `build_docs.py` edit. The `<2` pin is worth keeping either way.
+
+Nothing has been committed or pushed. Tell me if you want me to commit this.

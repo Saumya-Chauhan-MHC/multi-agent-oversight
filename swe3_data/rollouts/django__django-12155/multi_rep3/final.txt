@@ -1,0 +1,20 @@
+The fix is in place and the admin_docs suite passes, including a new regression test. Nothing is committed.
+
+**Change** in `django/contrib/admindocs/utils.py`: the indent is now computed from lines after the first, and `min()` gets `default=0` so a docstring with no indented body lines doesn't raise.
+
+```python
+indent = min(
+    (len(line) - len(line.lstrip()) for line in lines[1:] if line.lstrip()),
+    default=0,
+)
+```
+
+**Regression test** in `tests/admin_docs/test_utils.py`: `test_trim_docstring_first_line_has_text` uses `'test tests something.\n    \n    Body text.\n    '` and expects `'test tests something.\n\nBody text.'`. On the original code the body keeps its indentation, so the test would fail there.
+
+**Test run:** `python tests/runtests.py admin_docs` gave `Ran 58 tests`, `OK`. `pytest` isn't installed, so I used the Django runner.
+
+**Caveats:**
+- The runner reported it was using Django from `/testbed/django`. The agent checked that the file there matches the edited one, but I haven't confirmed that run picked up this checkout's change beyond that comparison.
+- flake8 and isort were not run.
+
+The changes are in the working tree for you to review with `git diff`. I haven't committed them. If you want a commit, I can make one with the attribution line from your setup.

@@ -1,0 +1,19 @@
+I fixed the `IndexError` in `is_fits`. Calling `identify_format("write", Table, "bububu.ecsv", None, [], {})` now returns `['ascii.ecsv']` instead of raising.
+
+**Cause:** `is_fits` in `astropy/io/fits/connect.py` falls through to `args[0]` when the path has no FITS extension and no file object is given. The registry passes an empty `args` tuple in that case, so the index fails.
+
+**Change:** the final check now returns `False` when there are no extra positional args:
+
+```python
+return len(args) > 0 and isinstance(
+    args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU)
+)
+```
+
+I did not change the extension-check logic, so the behaviour for `.fits`-style paths and for an `HDUList`/HDU passed as `args[0]` is unchanged.
+
+**Test:** I added `test_is_fits_identify_format_no_args` to `astropy/io/fits/tests/test_connect.py`. It covers non-FITS paths with no args, `.fits` paths, and `args[0]` being a `Table` or `HDUList`.
+
+**Results:** the new test passes. `astropy/io/fits/tests/test_connect.py` and `astropy/io/registry` together give 374 passed, 22 skipped, 5 xfailed, with no failures.
+
+The change is not committed.

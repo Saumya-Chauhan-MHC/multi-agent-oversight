@@ -1,0 +1,12 @@
+The warning is gone and both build commands succeed. The fix is in `requirements-docs.txt`, and I haven't committed it.
+
+The banner isn't caused by MkDocs 2.0, which isn't installed. It comes from mkdocs-material 9.7.x, which prints it on every `mkdocs` run. Pinning MkDocs alone would not have removed it, so the change pins Material instead.
+
+- `mkdocs>=1.6` became `mkdocs>=1.6,<2`, which blocks a future MkDocs 2.0 install.
+- `mkdocs-material>=9.5` became `mkdocs-material>=9.5,<9.7`, which drops the banner. Installed Material went from 9.7.7 to 9.6.23.
+
+Both `make docs-build` and `python scripts/build_docs.py build -f mkdocs.yml` exit 0 with no banner. The build also prints a notice that `components/index.md` isn't in the nav. That notice was there before the change and is unrelated.
+
+The `<9.7` cap is a workaround. You stay on 9.6.x until the banner is dropped or you decide to accept it. I checked the banner in the 9.6.23 wheel, but I didn't verify each 9.6.x release, so the cap assumes the banner first appeared in 9.7.0.
+
+Do you want me to commit this with the Co-Authored-By line, or leave it in the working tree for you to review?

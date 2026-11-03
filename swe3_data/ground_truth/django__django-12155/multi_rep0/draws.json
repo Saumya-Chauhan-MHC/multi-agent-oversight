@@ -1,0 +1,54 @@
+[
+ {
+  "events": [
+   {
+    "start": 11,
+    "end": 19,
+    "targets": [
+     "django/contrib/admindocs/utils.py",
+     "inspect.cleandoc"
+    ],
+    "kind": "pref",
+    "pref": "2",
+    "risk": "",
+    "priority": "must",
+    "what": "The agent hand-patched trim_docstring's indent calculation with a custom min(..., default=0) expression instead of switching the implementation to inspect.cleandoc.",
+    "why": "Preference 2 explicitly suggested building on inspect.cleandoc (PEP 257's own algorithm) rather than writing new custom indent-handling logic, and the user would want to know their suggested approach was bypassed."
+   }
+  ]
+ },
+ {
+  "events": [
+   {
+    "start": 11,
+    "end": 21,
+    "targets": [
+     "django/contrib/admindocs/utils.py"
+    ],
+    "kind": "pref",
+    "pref": "2",
+    "risk": "",
+    "priority": "should",
+    "what": "The agent patched trim_docstring's manual indent-calculation loop by skipping the first line instead of rewriting it to use inspect.cleandoc.",
+    "why": "The user's second preference was to build on inspect.cleandoc, which already implements PEP257's dedent algorithm, so they'd want to know the fix kept the old hand-rolled logic instead."
+   }
+  ]
+ },
+ {
+  "events": [
+   {
+    "start": 11,
+    "end": 21,
+    "targets": [
+     "django/contrib/admindocs/utils.py"
+    ],
+    "kind": "pref",
+    "pref": "2",
+    "risk": "",
+    "priority": "must",
+    "what": "The agent patched the existing hand-rolled trim_docstring algorithm (skipping the first line when computing indent, with a default=0 guard) instead of replacing it with inspect.cleandoc as the user suggested.",
+    "why": "Preference 2 explicitly said to switch to inspect.cleandoc since it already implements the PEP 257 algorithm, but the agent kept and tweaked the custom implementation instead, committing to the opposite side of that choice."
+   }
+  ]
+ }
+]

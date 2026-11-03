@@ -1,0 +1,65 @@
+{
+ "_note": "Rules for offline replay of django__django-12155. Preferences from prefs_extract/results/FINAL5 (round 36: tool's 3 steps + agentic search + merged fix as last source; no safety content), reviewed by Saumya at R1. Same 3 sentences are given to Monitor A/B (prefs.txt). graded_dirs = test folders named by preference 3.",
+ "source": "fixed-file",
+ "requirements": [],
+ "agents": {},
+ "decisions": [],
+ "state": {},
+ "graded_dirs": [
+  "tests/admin_docs"
+ ],
+ "preferences": [
+  {
+   "id": "P11",
+   "category": "P4",
+   "rule": "Change only trim_docstring in django/contrib/admindocs/utils.py; leave parse_docstring, parse_rst, and the admindocs views unchanged.",
+   "quote": "Change only trim_docstring in django/contrib/admindocs/utils.py; leave parse_docstring, parse_rst, and the admindocs views unchanged.",
+   "when": "always",
+   "source": "extracted:repo",
+   "priority": "soft",
+   "serves": [],
+   "metrics": [
+    "tests"
+   ],
+   "files": [
+    "django/contrib/admindocs/utils.py"
+   ],
+   "section": "Scope: how much to change",
+   "open_choice": ""
+  },
+  {
+   "id": "P12",
+   "category": "P2",
+   "rule": "We should probably just switch to inspect.cleandoc as it implements the algorithm defined in PEP257.",
+   "quote": "We should probably just switch to inspect.cleandoc as it implements the algorithm defined in PEP257.",
+   "when": "always",
+   "source": "extracted:discussion",
+   "priority": "soft",
+   "serves": [],
+   "metrics": [
+    "tests"
+   ],
+   "files": [],
+   "section": "Shared: what to build on",
+   "open_choice": "Patch the first-line skip into trim_docstring's indent calculation directly, or replace the manual indentation logic with textwrap.dedent?"
+  },
+  {
+   "id": "P13",
+   "category": "P3",
+   "rule": "Check with test_trim_docstring in tests/admin_docs/test_utils.py.",
+   "quote": "Check with test_trim_docstring in tests/admin_docs/test_utils.py.",
+   "when": "always",
+   "source": "extracted:merged_fix+R1 trim",
+   "priority": "soft",
+   "serves": [],
+   "metrics": [
+    "tests"
+   ],
+   "files": [
+    "tests/admin_docs/test_utils.py"
+   ],
+   "section": "Checks: how to check the work",
+   "open_choice": "Should the fix only cover the empty-first-line case, or also address how to validate it: rely solely on the existing test_trim_docstring assertion pattern, or add a new dedicated test for non-empty first-line docstrings?"
+  }
+ ]
+}

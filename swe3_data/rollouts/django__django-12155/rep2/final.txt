@@ -1,0 +1,11 @@
+Fixed. A docstring whose text starts on the opening line no longer breaks admindocs rendering, and the `admin_docs` suite passes (58 tests, including a new regression test).
+
+**Cause:** `trim_docstring` in `django/contrib/admindocs/utils.py` computed the common indent across all lines, including the first. The first line has zero indent when the text starts right after the quotes, so the indent became 0 and every following line kept its leading whitespace. docutils then read that as an indented block and raised the `default-role` error.
+
+**Change:**
+- `django/contrib/admindocs/utils.py`: the indent is now computed from `lines[1:]`, and I passed `default=0` to `min()` so a one-line docstring doesn't raise on an empty sequence. The first line is still stripped separately, as before.
+- `tests/admin_docs/test_utils.py`: added `test_trim_docstring_text_on_first_line`, which uses the docstring shape from the issue.
+
+I didn't run the docutils rendering end to end on the example from the issue. The regression test covers the trimming logic only.
+
+I did not commit anything.

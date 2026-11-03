@@ -1,0 +1,35 @@
+diff --git a/astropy/io/fits/connect.py b/astropy/io/fits/connect.py
+index 4b6150f4a..8616fa3a8 100644
+--- a/astropy/io/fits/connect.py
++++ b/astropy/io/fits/connect.py
+@@ -69,7 +69,9 @@ def is_fits(origin, filepath, fileobj, *args, **kwargs):
+             (".fits", ".fits.gz", ".fit", ".fit.gz", ".fts", ".fts.gz")
+         ):
+             return True
+-    return isinstance(args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU))
++    return len(args) > 0 and isinstance(
++        args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU)
++    )
+ 
+ 
+ def _decode_mixins(tbl):
+diff --git a/astropy/io/fits/tests/test_connect.py b/astropy/io/fits/tests/test_connect.py
+index c5c31033f..f3fb7988a 100644
+--- a/astropy/io/fits/tests/test_connect.py
++++ b/astropy/io/fits/tests/test_connect.py
+@@ -1002,3 +1002,15 @@ def test_meta_not_modified(tmp_path):
+     t.write(filename)
+     assert len(t.meta) == 1
+     assert t.meta["comments"] == ["a", "b"]
++
++
++def test_is_fits_identify_format_no_args():
++    """Regression test: identify_format for a non-FITS filename with no
++    extra positional args must not raise IndexError (see issue #14309)."""
++    from astropy.io.fits.connect import is_fits
++
++    assert is_fits("write", "bububu.ecsv", None) is False
++    assert is_fits("read", "bububu.ecsv", None) is False
++    assert is_fits("write", "bububu.fits", None) is True
++    assert is_fits("write", None, None, Table()) is False
++    assert is_fits("write", None, None, HDUList()) is True

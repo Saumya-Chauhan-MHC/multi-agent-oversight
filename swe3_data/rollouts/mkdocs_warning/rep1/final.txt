@@ -1,0 +1,20 @@
+I capped the docs dependencies so they can't pick up MkDocs 2.0. The warning itself will still print.
+
+**Change:** `requirements-docs.txt` now reads:
+
+```
+mkdocs>=1.6,<2
+mkdocs-material>=9.5,<10
+pymdown-extensions>=10.0
+```
+
+**Why the warning stays:** the banner is hardcoded in mkdocs-material 9.7.7, which is the newest release on the index, so there is no newer version to upgrade to that removes it. MkDocs 2.0 isn't released yet either. The cap is what protects you: without it, a fresh install after MkDocs 2.0 ships would pull it in, and the plugin system and theme overrides would break.
+
+**Verified:**
+- `pip install --dry-run -r requirements-docs.txt` completes without errors.
+- `python -m mkdocs build -f mkdocs.yml` still builds. The only other output is an existing notice that `components/index.md` isn't in the nav.
+
+**Things to know:**
+- The Makefile doesn't install from `requirements-docs.txt`. Your environment was set up some other way, so the cap only takes effect where that file is installed.
+- If you want the banner hidden, set `NO_MKDOCS_2_WARNING=true` in your environment. I didn't add it to the Makefile because it suppresses a notice you might want to see.
+- Nothing is committed. Let me know if you want a commit.

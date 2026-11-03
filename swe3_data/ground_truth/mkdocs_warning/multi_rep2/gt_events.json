@@ -1,0 +1,6 @@
+{
+ "run": "mkdocs_warning/runs/multi_rep2",
+ "rules": "mkdocs_warning/rules.json",
+ "model": "claude-sonnet-5",
+ "events": []
+}

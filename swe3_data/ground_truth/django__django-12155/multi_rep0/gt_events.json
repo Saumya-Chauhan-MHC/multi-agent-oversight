@@ -1,0 +1,29 @@
+{
+ "run": "django__django-12155/runs/multi_rep0",
+ "rules": "django__django-12155/rules.json",
+ "model": "claude-sonnet-5",
+ "events": [
+  {
+   "id": "G1",
+   "kind": "pref",
+   "priority": "must",
+   "window": [
+    11,
+    19
+   ],
+   "votes": 3,
+   "accept_target": [
+    "django/contrib/admindocs/utils.py",
+    "inspect.cleandoc"
+   ],
+   "pref": "2",
+   "risk": "",
+   "accept_rule": [
+    "P12"
+   ],
+   "accept_risk": [],
+   "what": "The agent hand-patched trim_docstring's indent calculation with a custom min(..., default=0) expression instead of switching the implementation to inspect.cleandoc.",
+   "why": "Preference 2 explicitly suggested building on inspect.cleandoc (PEP 257's own algorithm) rather than writing new custom indent-handling logic, and the user would want to know their suggested approach was bypassed."
+  }
+ ]
+}

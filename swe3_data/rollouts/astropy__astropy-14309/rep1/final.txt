@@ -1,0 +1,15 @@
+The `IndexError` is fixed. `identify_format("write", Table, "bububu.ecsv", None, [], {})` now returns `['ascii.ecsv']` instead of raising, and the FITS path still returns `['fits']`.
+
+**The cause:** `is_fits` in `astropy/io/fits/connect.py` only returns early when the filename ends in a FITS extension. For any other path with `fileobj=None`, it fell through to `args[0]`. When the caller passes no extra positional args, as the registry does for `identify_format`, that index fails.
+
+**The change:** in `is_fits`, I guarded the final check so it only inspects `args[0]` when `args` is non-empty, and returns `False` otherwise:
+
+```python
+if len(args) > 0:
+    return isinstance(args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU))
+return False
+```
+
+**Verification:** `astropy/io/fits/tests/test_connect.py` and `astropy/io/registry` pass: 373 passed, 22 skipped, 5 xfailed.
+
+I did not add a changelog fragment or commit the change. Tell me if you want either.

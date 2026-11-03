@@ -1,0 +1,30 @@
+diff --git a/requirements-docs.txt b/requirements-docs.txt
+index 294fecc..3f26f9e 100644
+--- a/requirements-docs.txt
++++ b/requirements-docs.txt
+@@ -1,3 +1,3 @@
+-mkdocs>=1.6
++mkdocs>=1.6,<2
+ mkdocs-material>=9.5
+ pymdown-extensions>=10.0
+diff --git a/scripts/build_docs.py b/scripts/build_docs.py
+index 4c8b210..fdbaa78 100644
+--- a/scripts/build_docs.py
++++ b/scripts/build_docs.py
+@@ -7,12 +7,16 @@ Usage:
+ 
+ from __future__ import annotations
+ 
++import os
+ import subprocess
+ import sys
+ 
+ 
+ def main() -> None:
+     """Proxy to mkdocs CLI with the given arguments."""
++    # mkdocs-material prints a MkDocs 2.0 notice on import; this project pins
++    # MkDocs 1.x, so the notice does not apply. Honour an explicit override.
++    os.environ.setdefault("NO_MKDOCS_2_WARNING", "true")
+     args = sys.argv[1:] or ["build"]
+     cmd = [sys.executable, "-m", "mkdocs"] + args
+     result = subprocess.run(cmd, check=False)

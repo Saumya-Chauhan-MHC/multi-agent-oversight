@@ -1,0 +1,15 @@
+The `IndexError` is fixed in `is_fits`, but the fix is uncommitted and I haven't independently checked the diff.
+
+**The fix:** `astropy/io/fits/connect.py` now returns `len(args) > 0 and isinstance(args[0], ...)`, so an empty `args` no longer raises. `is_fits` is registered for both read and write, so this covers both sides. FITS-extension paths and `fileobj` handling are unchanged.
+
+**The test:** `test_is_fits_non_fits_string_path_no_args` in `astropy/io/fits/tests/test_connect.py` checks that a non-FITS string path with no extra args returns `False` for read and write. It also checks that a `.fits` path returns `True`, and that an `HDUList` passed as `args[0]` returns `True`.
+
+**Tests:** `astropy/io/fits/tests/test_connect.py` and `astropy/io/registry` gave 374 passed, 22 skipped, 5 xfailed.
+
+**Reproduction:** `identify_format('write', Table, 'bububu.ecsv', None, [], {})` now returns `['ascii.ecsv']` instead of raising. I expected `[]`, but the ECSV identifier correctly claims `.ecsv` paths, so the non-empty result is right.
+
+**Not verified:**
+- I did not confirm that the new test fails on the unpatched code.
+- I did not run the wider astropy test suite.
+
+I haven't committed anything. Say the word and I can have the subagent check the pre-fix failure, or commit with the attribution line.

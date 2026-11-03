@@ -1,0 +1,13 @@
+Updating won't remove this warning. The banner is printed by mkdocs-material 9.7.6 and later, and 9.7.7 (the newest release) is already installed. I haven't changed any files.
+
+**What I found**
+- The banner comes from `material/templates/__init__.py` in mkdocs-material. It prints on every `mkdocs` run unless the env var `NO_MKDOCS_2_WARNING` is set.
+- Checking the published wheels: 9.7.0 through 9.7.5 and 9.6.23 have no banner. 9.7.6 and 9.7.7 do.
+- The build itself succeeds with the banner. The only other output is an unrelated INFO line: `components/index.md` is not in the nav.
+- MkDocs 2.0 is not on PyPI yet (latest `mkdocs` is 1.6.1), so the warning is about a future release.
+
+**Options**
+1. **Pin to silence the banner:** change `requirements-docs.txt` to `mkdocs-material>=9.5,<9.7.6`. This is a downgrade from 9.7.7, which is the opposite of what "update" suggests, but it removes the banner.
+2. **Keep the latest and suppress the banner:** set `NO_MKDOCS_2_WARNING=true` in the `docs-build` target of the Makefile. I confirmed this suppresses the banner while the build still succeeds.
+
+I'd go with option 2 if you want to stay on current releases, and option 1 if you want the output clean without touching the Makefile. Tell me which one and I'll make the change.

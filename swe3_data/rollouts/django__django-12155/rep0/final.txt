@@ -1,0 +1,7 @@
+`trim_docstring` now handles docstrings whose text starts on the opening line, so the admindocs view no longer produces the `default-role` error from the issue.
+
+The cause was that the indent was taken as the minimum over all lines, including the first. When the text starts on the opening line, that line has zero indent, so the body's tab indentation was never stripped and docutils read it as a block quote. The fix in `django/contrib/admindocs/utils.py` computes the indent from `lines[1:]` and passes `default=0` so a single-line docstring doesn't hit an empty `min()`.
+
+I also added two tests to `tests/admin_docs/test_utils.py`: one for text on the first line, and one for a single-line docstring. The `admin_docs` suite passes with 59 tests. With the fix stashed, the new first-line test fails, so it does catch the bug.
+
+I didn't commit anything.

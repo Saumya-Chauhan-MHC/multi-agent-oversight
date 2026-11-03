@@ -1,0 +1,6 @@
+{
+ "run": "astropy__astropy-14309/runs/multi_rep1",
+ "rules": "astropy__astropy-14309/rules.json",
+ "model": "claude-sonnet-5",
+ "events": []
+}

@@ -1,0 +1,67 @@
+{
+ "_note": "Rules for offline replay of mkdocs_warning. Preferences from prefs_extract/results/FINAL5 (round 36: tool's 3 steps + agentic search + merged fix as last source; no safety content), reviewed by Saumya at R1. Same 3 sentences are given to Monitor A/B (prefs.txt). graded_dirs = test folders named by preference 3.",
+ "source": "fixed-file",
+ "requirements": [],
+ "agents": {},
+ "decisions": [],
+ "state": {},
+ "graded_dirs": [],
+ "preferences": [
+  {
+   "id": "P11",
+   "category": "P4",
+   "rule": "Change only requirements-docs.txt; leave scripts/build_docs.py, the Makefile and mkdocs.yml unchanged.",
+   "quote": "Change only requirements-docs.txt; leave scripts/build_docs.py, the Makefile and mkdocs.yml unchanged.",
+   "when": "always",
+   "source": "extracted:user answer at R1",
+   "priority": "soft",
+   "serves": [],
+   "metrics": [
+    "tests"
+   ],
+   "files": [
+    "mkdocs.yml",
+    "requirements-docs.txt",
+    "scripts/build_docs.py"
+   ],
+   "section": "Scope: how much to change",
+   "open_choice": "Pin only mkdocs-material's upper bound, or also cap the sibling mkdocs>=1.6 pin the same way?"
+  },
+  {
+   "id": "P12",
+   "category": "P2",
+   "rule": "Keep mkdocs and mkdocs-material; update their version pins rather than migrating to Zensical.",
+   "quote": "Keep mkdocs and mkdocs-material; update their version pins rather than migrating to Zensical.",
+   "when": "always",
+   "source": "extracted:user answer at R1",
+   "priority": "soft",
+   "serves": [],
+   "metrics": [
+    "tests"
+   ],
+   "files": [],
+   "section": "Shared: what to build on",
+   "open_choice": "Bump the mkdocs/mkdocs-material/pymdown-extensions version pins to pick up the fix, or migrate to Zensical (the suggested maintained successor)?"
+  },
+  {
+   "id": "P13",
+   "category": "P3",
+   "rule": "Check with make docs-build (python scripts/build_docs.py build -f mkdocs.yml), which should exit 0 and build cleanly after installing the updated requirements-docs.txt.",
+   "quote": "Check with make docs-build (python scripts/build_docs.py build -f mkdocs.yml), which should exit 0 and build cleanly after installing the updated requirements-docs.txt.",
+   "when": "always",
+   "source": "extracted:repo",
+   "priority": "soft",
+   "serves": [],
+   "metrics": [
+    "tests"
+   ],
+   "files": [
+    "mkdocs.yml",
+    "requirements-docs.txt",
+    "scripts/build_docs.py"
+   ],
+   "section": "Checks: how to check the work",
+   "open_choice": ""
+  }
+ ]
+}

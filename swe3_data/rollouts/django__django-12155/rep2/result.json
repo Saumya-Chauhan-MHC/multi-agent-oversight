@@ -1,0 +1,41 @@
+{
+ "scenario": "real_divergence",
+ "week": 4,
+ "setting": "haiku55-single-notool_swe3",
+ "exp": "swe3",
+ "rep": 2,
+ "model": "claude-haiku-5-5",
+ "dummy": null,
+ "interactive": false,
+ "instance": "django__django-12155",
+ "cond": "single",
+ "container": "rd-2be9fc3812",
+ "setup_s": 11.4,
+ "claude_rc": 0,
+ "agent_s": 44.3,
+ "models_used": {
+  "lead": [
+   "claude-haiku-5-5"
+  ]
+ },
+ "cost_usd": 0.0046485,
+ "resolved": true,
+ "f2p_passed": 1,
+ "f2p_total": 1,
+ "p2p_passed": 6,
+ "p2p_total": 6,
+ "layer": "local",
+ "files_changed": [
+  "django/contrib/admindocs/utils.py",
+  "tests/admin_docs/test_utils.py"
+ ],
+ "source_files_changed": [
+  "django/contrib/admindocs/utils.py"
+ ],
+ "touched_shared": false,
+ "touched_local": true,
+ "told_layer": false,
+ "card_A": false,
+ "card_B": true,
+ "recorded": 20
+}

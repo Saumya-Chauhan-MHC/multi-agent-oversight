@@ -1,0 +1,9 @@
+`trim_docstring` now handles docstrings whose first line has text right after the opening quotes, so the admindocs view no longer errors on them.
+
+The cause was that the common indentation was computed across every line, including the first. The first line always has zero indentation, so the minimum was always 0 and nothing got trimmed. The fix in `django/contrib/admindocs/utils.py` measures indentation from `lines[1:]` only. I also added `default=0`, so a docstring with no indented continuation lines doesn't raise `ValueError` from `min()` on an empty sequence.
+
+For the example from the report, `trim_docstring('test tests something.\n    \n    Body text.\n    Indented.\n    ')` now returns `'test tests something.\n\nBody text.\nIndented.'`. The existing all-empty-first-line docstrings are unchanged.
+
+I added `test_trim_docstring_first_line_not_empty` to `tests/admin_docs/test_utils.py`. With the fix, `admin_docs` runs 58 tests and passes. With the fix stashed, the new test fails, so it covers the bug.
+
+I didn't commit the change.

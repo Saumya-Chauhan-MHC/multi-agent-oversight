@@ -1,0 +1,14 @@
+The `IndexError` is fixed. `is_fits` no longer reads `args[0]` when no extra arguments are passed.
+
+**Cause:** In `astropy/io/fits/connect.py`, `is_fits` falls through to `isinstance(args[0], ...)` whenever the filename doesn't end in a FITS extension. The registry calls identifiers with only `(origin, path, fileobj)`, so `args` is empty and indexing it fails. Your reproducer hit exactly that case with `bububu.ecsv`.
+
+**Change:**
+- `astropy/io/fits/connect.py`: the final return is now `len(args) > 0 and isinstance(args[0], (...))`, so it returns `False` when there is no extra argument.
+- `astropy/io/fits/tests/test_connect.py`: added `test_is_fits_no_args_non_fits_filename`, which checks that a `.ecsv` path returns `False` and a `.fits` path returns `True`.
+
+**Verification:**
+- `identify_format("write", Table, "bububu.ecsv", None, [], {})` now returns `['ascii.ecsv']`, and the `.fits` path returns `['fits']`.
+- `astropy/io/fits/tests/test_connect.py` and `astropy/io/registry` together: 373 passed, 22 skipped, 5 xfailed.
+- The new regression test passes.
+
+I did not commit or push anything.

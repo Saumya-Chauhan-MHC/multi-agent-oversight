@@ -1,0 +1,22 @@
+The fix is in the working tree, uncommitted. The `IndexError` came from `is_fits` in `astropy/io/fits/connect.py`. When `identify_format` is called with no extra args and a non-FITS filename, the function reads `args[0]` on an empty tuple.
+
+**Change:**
+```diff
+-    return isinstance(args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU))
++    if args:
++        return isinstance(args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU))
++    return False
+```
+
+I also added a regression test at the end of `astropy/io/fits/tests/test_connect.py`. It calls `identify_format("write", Table, "bububu.ecsv", None, [], {})` and asserts that `"fits"` is not returned.
+
+**Results (reported by the subagent):**
+- `astropy/io/fits/tests/test_connect.py`: 142 passed, 8 skipped, 5 xfailed.
+- `astropy/io/registry`: 232 passed, 14 skipped.
+- The new test fails without the fix with the same `IndexError` at `connect.py:72`, and passes with it.
+
+I haven't re-run these tests or reviewed the diff myself. The subagent also said the regression came from commit 2a0c5c6f5 folding the `args[0]` check into an unconditional return. That's its reading of the history, not something I checked.
+
+The full astropy test suite was not run. The subagent also mentioned a numpy binary-incompatibility warning in its pytest output, which it attributed to the environment.
+
+I have not committed. If you want, I can commit with the message and attribution you specified.

@@ -1,0 +1,2 @@
+c001 ~/.cache/real_divergence_ws/week_4/real_divergence/haiku55-multi-notool_swe3/astropy__astropy-14309/plain-3/testbed/astropy/io/fits/connect.py 76590403e445 agent=a4b1b275eb449261a session=1
+c002 astropy/io/fits/tests/test_connect.py f53e26b72597 agent=a4b1b275eb449261a session=1 via=bash

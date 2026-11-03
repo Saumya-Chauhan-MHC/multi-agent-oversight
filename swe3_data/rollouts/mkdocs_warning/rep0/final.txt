@@ -1,0 +1,9 @@
+The docs build succeeds, but updating the dependency won't remove the warning. I haven't changed any files.
+
+**Why updating won't help:** `mkdocs-material` 9.7.7 is already the newest release on the package index. The banner is hardcoded in that package (`material/templates/__init__.py`), and it prints on every run where the process is `mkdocs`. Nothing in the repo's build is broken: `make docs-build` exits 0 and produces the site. The one warning-related note is the `components/index.md` page that isn't in the nav, which is unrelated to Material.
+
+**Ways to silence it, if you want:**
+- **Set `NO_MKDOCS_2_WARNING=1`.** I confirmed this removes the banner and the build still passes. Options: add `export NO_MKDOCS_2_WARNING=1` to the `docs-build` and `docs-serve` recipes in the Makefile, or set it in your shell.
+- **Leave it.** It's only cosmetic.
+
+Separately, `requirements-docs.txt` uses open lower bounds (`mkdocs>=1.6`, `mkdocs-material>=9.5`). Pinning to the versions you test with would make builds reproducible. Tell me which option you want and I'll make the change.

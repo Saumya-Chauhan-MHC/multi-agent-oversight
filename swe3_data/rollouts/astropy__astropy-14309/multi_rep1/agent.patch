@@ -1,0 +1,58 @@
+diff --git a/astropy/io/fits/connect.py b/astropy/io/fits/connect.py
+index 4b6150f4a..71a699cab 100644
+--- a/astropy/io/fits/connect.py
++++ b/astropy/io/fits/connect.py
+@@ -65,11 +65,14 @@ def is_fits(origin, filepath, fileobj, *args, **kwargs):
+         fileobj.seek(pos)
+         return sig == FITS_SIGNATURE
+     elif filepath is not None:
+-        if filepath.lower().endswith(
++        return filepath.lower().endswith(
+             (".fits", ".fits.gz", ".fit", ".fit.gz", ".fts", ".fts.gz")
+-        ):
+-            return True
+-    return isinstance(args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU))
++        )
++    # Neither fileobj nor filepath: fall back to an HDU object passed as the
++    # first positional argument (e.g. ``read(hdulist)``).
++    return len(args) > 0 and isinstance(
++        args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU)
++    )
+ 
+ 
+ def _decode_mixins(tbl):
+diff --git a/astropy/io/fits/tests/test_connect.py b/astropy/io/fits/tests/test_connect.py
+index c5c31033f..357b5b1f2 100644
+--- a/astropy/io/fits/tests/test_connect.py
++++ b/astropy/io/fits/tests/test_connect.py
+@@ -1002,3 +1002,30 @@ def test_meta_not_modified(tmp_path):
+     t.write(filename)
+     assert len(t.meta) == 1
+     assert t.meta["comments"] == ["a", "b"]
++
++
++def test_is_fits_identifier_non_fits_path_no_args(tmp_path):
++    """Regression: identify_format must not raise IndexError for a non-FITS
++    path when no extra positional args are given (write case)."""
++    import io
++
++    from astropy.io.fits.hdu.hdulist import FITS_SIGNATURE
++    from astropy.io.registry import identify_format
++
++    # Non-FITS path with no extra args must not raise and must not claim "fits"
++    assert "fits" not in identify_format("write", Table, "bububu.ecsv", None, [], {})
++
++    # FITS path is still identified
++    fits_path = tmp_path / "test.fits"
++    HDUList([PrimaryHDU()]).writeto(fits_path)
++    assert "fits" in identify_format("write", Table, "bububu.fits", None, [], {})
++    assert "fits" in identify_format("read", Table, str(fits_path), None, [], {})
++
++    # HDUList passed as the first positional argument
++    assert "fits" in identify_format(
++        "read", Table, None, None, [HDUList([PrimaryHDU()])], {}
++    )
++
++    # File object with a FITS signature
++    fileobj = io.BytesIO(FITS_SIGNATURE + b" " * 50)
++    assert "fits" in identify_format("read", Table, None, fileobj, [], {})

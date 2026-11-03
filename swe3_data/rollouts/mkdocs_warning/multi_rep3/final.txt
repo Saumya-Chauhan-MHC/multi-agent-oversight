@@ -1,0 +1,11 @@
+The warning is gone, but the fix is the opposite of what you suggested. Updating mkdocs-material makes the warning worse, not better.
+
+- **Cause:** mkdocs-material 9.7.2 and later print the MkDocs 2.0 notice on every build. The latest release, 9.7.7, has it.
+- **Change:** in `requirements-docs.txt`, I'd expect `mkdocs-material>=9.5` to become `mkdocs-material>=9.5,<9.7.2`. The agent reported this, but I haven't checked the file myself.
+- **Result:** the agent reinstalled from that file and ran both build commands. Both exit 0 and show no warning block. The only INFO line left is an existing "components/index.md not in nav" notice, which is unrelated.
+
+Two things to check:
+- The agent's build output shows the site written to `/testbed/site`, and it installed into a conda env at `/opt/miniconda3/envs/testbed`. That may not be your workspace path, so confirm the build really ran against this repo.
+- The pin keeps Material at 9.7.1 until a later release drops the notice. The agent's other option was the `NO_MKDOCS_2_WARNING` environment variable. It said that switch is read from the package source, not documented in its metadata, so it didn't use it. Say if you'd rather stay on the latest Material and suppress the notice that way.
+
+Nothing is committed. The only change in the working tree should be `requirements-docs.txt`.

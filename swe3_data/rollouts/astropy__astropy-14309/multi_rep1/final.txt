@@ -1,0 +1,21 @@
+The fix is in the working tree, uncommitted. The subagent reproduced the error, fixed it, and its regression test passes. I haven't re-run the tests myself; this summary is the subagent's report.
+
+**Root cause:** Commit 2a0c5c6f5 ("fix SIM103") folded the `elif filepath is not None:` branch into a trailing `return isinstance(args[0], ...)`. Before that, a path without a FITS extension returned `None` early. After the refactor it fell through to `args[0]`, which raises when `args` is empty. That is exactly the issue's `identify_format("write", Table, "bububu.ecsv", None, [], {})` call.
+
+**Change in `astropy/io/fits/connect.py`:**
+- When a path is given, `is_fits` now returns the extension check directly, so a non-FITS path returns `False`.
+- The `args[0]` check only runs when there is neither a fileobj nor a path. It is guarded with `len(args) > 0`, so `read(hdulist)`-style calls still work.
+
+**Regression test:** `test_is_fits_identifier_non_fits_path_no_args` in `astropy/io/fits/tests/test_connect.py`. It checks that:
+- a non-FITS `.ecsv` path with empty args does not identify as `fits`;
+- `.fits` paths are identified for both write and read;
+- an `HDUList` as the first positional arg is identified;
+- a file object with the FITS signature is identified.
+
+The test fails on the original code with the `IndexError` and passes with the fix.
+
+**Test results reported:**
+- `pytest astropy/io/fits/tests/test_connect.py astropy/io/registry`: 374 passed, 22 skipped, 5 xfailed
+- `pytest astropy/io/registry/tests`: 231 passed, 14 skipped
+
+Ruff and black were not run on the changed files. Nothing has been committed or pushed.

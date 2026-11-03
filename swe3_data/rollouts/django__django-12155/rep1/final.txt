@@ -1,0 +1,7 @@
+Admindoc now handles docstrings whose text starts on the same line as the opening quotes. The `admin_docs` suite passes (58 tests, including a new regression test).
+
+**The cause:** `trim_docstring` in `django/contrib/admindocs/utils.py` computed the common indent over every line, including the first. That line has zero indentation when the text follows `"""` directly, so the minimum was always 0. The extra indentation was then never stripped from the other lines, and docutils read them as a literal block, which produced the "no content permitted" error.
+
+**The fix:** the indent is now computed from `lines[1:]`. I also added `default=0`, which the reporter's one-line suggestion lacked. Without it, a docstring with no content after the first line would raise `ValueError` from `min()`.
+
+I added `test_trim_docstring_first_line_not_empty` to `tests/admin_docs/test_utils.py`. I did not commit anything.

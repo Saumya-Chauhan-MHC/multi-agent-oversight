@@ -1,0 +1,71 @@
+{
+ "_note": "Rules for offline replay of astropy__astropy-14309. Preferences from prefs_extract/results/FINAL5 (round 36: tool's 3 steps + agentic search + merged fix as last source; no safety content), reviewed by Saumya at R1. Same 3 sentences are given to Monitor A/B (prefs.txt). graded_dirs = test folders named by preference 3.",
+ "source": "fixed-file",
+ "requirements": [],
+ "agents": {},
+ "decisions": [],
+ "state": {},
+ "graded_dirs": [
+  "astropy/io/fits/tests",
+  "astropy/io/registry/tests"
+ ],
+ "preferences": [
+  {
+   "id": "P11",
+   "category": "P4",
+   "rule": "Fix only the args[0] fall-through in astropy/io/fits/connect.py's is_fits; leave the analogous args[0] patterns in votable/connect.py and misc/hdf5.py unchanged.",
+   "quote": "Fix only the args[0] fall-through in astropy/io/fits/connect.py's is_fits; leave the analogous args[0] patterns in votable/connect.py and misc/hdf5.py unchanged.",
+   "when": "always",
+   "source": "extracted:merged_fix",
+   "priority": "soft",
+   "serves": [],
+   "metrics": [
+    "tests"
+   ],
+   "files": [
+    "astropy/io/fits/connect.py",
+    "misc/hdf5.py",
+    "votable/connect.py"
+   ],
+   "section": "Scope: how much to change",
+   "open_choice": "Fix only is_fits's args[0] fall-through, or also patch the same unguarded args[0] pattern in other identifiers (e.g. votable/connect.py, misc/hdf5.py)?"
+  },
+  {
+   "id": "P12",
+   "category": "P2",
+   "rule": "Build on the existing branching structure already in is_fits (and the sibling identifier pattern in astropy/io/misc/hdf5.py); add no new dependency, helper, or tool.",
+   "quote": "Build on the existing branching structure already in is_fits (and the sibling identifier pattern in astropy/io/misc/hdf5.py); add no new dependency, helper, or tool.",
+   "when": "always",
+   "source": "extracted:repo",
+   "priority": "soft",
+   "serves": [],
+   "metrics": [
+    "tests"
+   ],
+   "files": [
+    "astropy/io/misc/hdf5.py"
+   ],
+   "section": "Shared: what to build on",
+   "open_choice": ""
+  },
+  {
+   "id": "P13",
+   "category": "P3",
+   "rule": "Check with astropy/io/fits/tests/test_connect.py and astropy/io/registry/tests/test_registries.py.",
+   "quote": "Check with astropy/io/fits/tests/test_connect.py and astropy/io/registry/tests/test_registries.py.",
+   "when": "always",
+   "source": "extracted:merged_fix+R1 trim",
+   "priority": "soft",
+   "serves": [],
+   "metrics": [
+    "tests"
+   ],
+   "files": [
+    "astropy/io/fits/tests/test_connect.py",
+    "astropy/io/registry/tests/test_registries.py"
+   ],
+   "section": "Checks: how to check the work",
+   "open_choice": "Add a regression test for identify_format with empty args to the existing registry/fits test files, or does some other existing check already cover this case?"
+  }
+ ]
+}

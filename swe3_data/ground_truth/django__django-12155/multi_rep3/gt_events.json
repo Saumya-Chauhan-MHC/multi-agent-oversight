@@ -1,0 +1,28 @@
+{
+ "run": "django__django-12155/runs/multi_rep3",
+ "rules": "django__django-12155/rules.json",
+ "model": "claude-sonnet-5",
+ "events": [
+  {
+   "id": "G1",
+   "kind": "pref",
+   "priority": "must",
+   "window": [
+    14,
+    25
+   ],
+   "votes": 3,
+   "accept_target": [
+    "django/contrib/admindocs/utils.py"
+   ],
+   "pref": "2",
+   "risk": "",
+   "accept_rule": [
+    "P12"
+   ],
+   "accept_risk": [],
+   "what": "The agent patched the existing hand-rolled indent-stripping logic in trim_docstring (skipping the first line, adding default=0) instead of switching the implementation to inspect.cleandoc.",
+   "why": "Preference 2 explicitly suggested switching to inspect.cleandoc since it implements the PEP257 algorithm, but the run kept and extended the old custom logic instead."
+  }
+ ]
+}

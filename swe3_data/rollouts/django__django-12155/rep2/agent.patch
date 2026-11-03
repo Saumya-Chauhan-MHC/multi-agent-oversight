@@ -1,0 +1,33 @@
+diff --git a/django/contrib/admindocs/utils.py b/django/contrib/admindocs/utils.py
+index 4c0e7e2a56..16dfebb5d6 100644
+--- a/django/contrib/admindocs/utils.py
++++ b/django/contrib/admindocs/utils.py
+@@ -34,7 +34,9 @@ def trim_docstring(docstring):
+         return ''
+     # Convert tabs to spaces and split into lines
+     lines = docstring.expandtabs().splitlines()
+-    indent = min(len(line) - len(line.lstrip()) for line in lines if line.lstrip())
++    # The first line is excluded from the indent calculation: its text may
++    # start immediately after the opening quotes (indent 0).
++    indent = min((len(line) - len(line.lstrip()) for line in lines[1:] if line.lstrip()), default=0)
+     trimmed = [lines[0].lstrip()] + [line[indent:].rstrip() for line in lines[1:]]
+     return "\n".join(trimmed).strip()
+ 
+diff --git a/tests/admin_docs/test_utils.py b/tests/admin_docs/test_utils.py
+index 17ea912015..511fab2d25 100644
+--- a/tests/admin_docs/test_utils.py
++++ b/tests/admin_docs/test_utils.py
+@@ -44,6 +44,13 @@ class TestUtils(AdminDocsSimpleTestCase):
+         )
+         self.assertEqual(trim_docstring_output, trimmed_docstring)
+ 
++    def test_trim_docstring_text_on_first_line(self):
++        docstring = 'test tests something.\n\tIndented line.\n\t'
++        self.assertEqual(
++            trim_docstring(docstring),
++            'test tests something.\nIndented line.',
++        )
++
+     def test_parse_docstring(self):
+         title, description, metadata = parse_docstring(self.docstring)
+         docstring_title = (

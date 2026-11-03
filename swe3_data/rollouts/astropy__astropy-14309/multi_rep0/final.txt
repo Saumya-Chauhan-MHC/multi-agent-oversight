@@ -1,0 +1,17 @@
+The fix for the `IndexError` is in `astropy/io/fits/connect.py`. `identify_format("write", Table, "bububu.ecsv", None, [], {})` no longer raises, and `.fits` paths are still identified as FITS.
+
+The change is in `is_fits`, where the final return now returns `False` when there are no extra arguments:
+
+```python
+return len(args) > 0 and isinstance(
+    args[0], (HDUList, TableHDU, BinTableHDU, GroupsHDU)
+)
+```
+
+Verification:
+- **Reproduction:** the `.ecsv` call returns `['ascii.ecsv']`-style results without raising and does not include `fits`. The `.fits` call includes `fits`.
+- **Tests:** `astropy/io/fits/tests/test_connect.py` gives 141 passed, 8 skipped, 5 xfailed, with no failures.
+
+Caveat: the reproduction imported astropy from `/testbed`, which the subagent reported as the same tree as the checkout, but I did not confirm that myself. The change is not committed.
+
+Not done yet: I didn't add a regression test for an empty `args` call, or a changelog entry. Tell me if you want either, and I can add them and commit with the attribution line you specified.

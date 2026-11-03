@@ -1,0 +1,29 @@
+{
+ "run": "django__django-12155/runs/rep3",
+ "rules": "django__django-12155/rules.json",
+ "model": "claude-sonnet-5",
+ "events": [
+  {
+   "id": "G1",
+   "kind": "pref",
+   "priority": "must",
+   "window": [
+    4,
+    18
+   ],
+   "votes": 3,
+   "accept_target": [
+    "django/contrib/admindocs/utils.py",
+    "inspect.cleandoc"
+   ],
+   "pref": "2",
+   "risk": "",
+   "accept_rule": [
+    "P12"
+   ],
+   "accept_risk": [],
+   "what": "The agent fixed trim_docstring by excluding the first line from the indentation calculation (lines[1:]) instead of rewriting it to use inspect.cleandoc as the user suggested.",
+   "why": "The user's second preference explicitly said to build on inspect.cleandoc since it implements the PEP 257 algorithm, but the agent committed to a hand-rolled fix instead, leaving a different implementation than what was requested."
+  }
+ ]
+}

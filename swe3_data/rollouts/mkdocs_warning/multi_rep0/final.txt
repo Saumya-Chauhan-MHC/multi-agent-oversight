@@ -1,0 +1,21 @@
+The banner is gone, but the fix holds Material back rather than updating it, so you should decide whether that's acceptable.
+
+**What changed** (`requirements-docs.txt`, uncommitted):
+```
+mkdocs>=1.6,<2
+mkdocs-material>=9.7.1,<9.7.2
+pymdown-extensions>=10.0
+```
+
+- **mkdocs is capped below 2.0.** This is the change the warning is about. MkDocs 2.0 removes the plugin system, so the cap keeps the build on the 1.x line.
+- **mkdocs-material is pinned to 9.7.1.** The subagent found that the warning first appears in 9.7.2, so 9.7.1 is the newest release without it. The upper bound stops pip from installing 9.7.2 or later, which would bring the banner back.
+
+**Trade-off:** you get no Material releases after 9.7.1, including any bug or security fixes. Pinning is a workaround, not the update you asked for. The alternatives:
+
+1. **Keep this pin.** It's the quietest option, but it has to be revisited when you want newer Material.
+2. **Upgrade to the latest Material and set `NO_MKDOCS_2_WARNING`** to hide the banner. This is the normal way to upgrade, but it only hides the message.
+3. **Upgrade to the latest Material and keep the banner.** Nothing breaks today, since the 2.0 cap already keeps mkdocs on 1.x.
+
+Verification was done by the subagent in an isolated venv (`/tmp/docs-venv`). `make docs-build` and `python scripts/build_docs.py build -f mkdocs.yml` both exit 0 with no warnings. I haven't re-run the build myself. Nothing is committed.
+
+Which option do you want? I'd lean toward option 2, since it keeps Material current and only hides the message.

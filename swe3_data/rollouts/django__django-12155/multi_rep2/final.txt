@@ -1,0 +1,9 @@
+The fix is in `django/contrib/admindocs/utils.py`, with a regression test added, and the `admin_docs` suite passes (58 tests). I haven't committed it.
+
+**The change:** `trim_docstring` now computes the common indent from `lines[1:]` only, so a first line with text no longer forces the indent to 0. I also added `default=0` so a one-line docstring doesn't raise on an empty sequence. A docstring with a blank first line produces the same output as before.
+
+**The test:** `test_trim_docstring_first_line_not_empty` in `tests/admin_docs/test_utils.py` covers a docstring whose first line has text. The subagent reports that it fails on the old logic and passes on the new one. It checked the old behavior with an inline copy of the old function, not by stashing the change.
+
+One thing I didn't verify myself: the test run reported importing Django from `/testbed/django`, not from the working directory path. The subagent says that is the same repository, so the run covered the edited code, but I haven't confirmed that independently.
+
+I can commit this with the attribution line if you want.

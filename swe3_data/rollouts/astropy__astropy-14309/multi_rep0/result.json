@@ -1,0 +1,43 @@
+{
+ "scenario": "real_divergence",
+ "week": 4,
+ "setting": "haiku55-multi-notool_swe3",
+ "exp": "swe3",
+ "rep": 0,
+ "model": "claude-haiku-5-5",
+ "dummy": null,
+ "interactive": false,
+ "instance": "astropy__astropy-14309",
+ "cond": "multi",
+ "container": "rd-940138fc41",
+ "setup_s": 2.2,
+ "claude_rc": 0,
+ "agent_s": 35.0,
+ "models_used": {
+  "lead": [
+   "claude-haiku-5-5"
+  ],
+  "subagent": [
+   "claude-haiku-5-5"
+  ]
+ },
+ "cost_usd": 0.008639505,
+ "resolved": true,
+ "f2p_passed": 1,
+ "f2p_total": 1,
+ "p2p_passed": 141,
+ "p2p_total": 141,
+ "layer": "local",
+ "files_changed": [
+  "astropy/io/fits/connect.py"
+ ],
+ "source_files_changed": [
+  "astropy/io/fits/connect.py"
+ ],
+ "touched_shared": false,
+ "touched_local": true,
+ "told_layer": false,
+ "card_A": false,
+ "card_B": true,
+ "recorded": 24
+}

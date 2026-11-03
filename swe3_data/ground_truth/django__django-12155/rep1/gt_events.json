@@ -1,0 +1,29 @@
+{
+ "run": "django__django-12155/runs/rep1",
+ "rules": "django__django-12155/rules.json",
+ "model": "claude-sonnet-5",
+ "events": [
+  {
+   "id": "G1",
+   "kind": "pref",
+   "priority": "must",
+   "window": [
+    4,
+    16
+   ],
+   "votes": 3,
+   "accept_target": [
+    "django/contrib/admindocs/utils.py",
+    "inspect.cleandoc"
+   ],
+   "pref": "2",
+   "risk": "",
+   "accept_rule": [
+    "P12"
+   ],
+   "accept_risk": [],
+   "what": "The agent rewrote trim_docstring's indent calculation manually (skipping the first line, with a default=0 fallback) instead of switching the function to use inspect.cleandoc.",
+   "why": "The user's second preference explicitly said to build on inspect.cleandoc as the PEP257 reference implementation rather than hand-rolling the algorithm, and the agent committed to the opposite approach without flagging the deviation."
+  }
+ ]
+}
