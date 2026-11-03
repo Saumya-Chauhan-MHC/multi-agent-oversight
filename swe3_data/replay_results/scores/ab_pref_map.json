@@ -1,0 +1,12 @@
+{
+ "django__django-12155|multi_rep0|B|5": "1",
+ "django__django-12155|multi_rep0|B|6": "3",
+ "django__django-12155|multi_rep1|B|5": "2",
+ "django__django-12155|multi_rep1|B|6": "1",
+ "django__django-12155|multi_rep2|A|8": "2",
+ "django__django-12155|multi_rep3|B|10": "2",
+ "django__django-12155|rep1|A|2": "2",
+ "django__django-12155|rep3|A|1": "2",
+ "mkdocs_warning|multi_rep0|B|30": "2",
+ "mkdocs_warning|multi_rep1|B|13": "1"
+}
