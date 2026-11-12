@@ -186,8 +186,8 @@ decided not to -- which is the denominator precision needs.
 
 ## Still open
 
-- `v6_gate.py` is wired nowhere in `overlay/.claude/settings.json`, so cloning still gets v3's
-  hooks. `setup_rw.py` writes its own settings and does not depend on that file
+- `overlay/.claude/settings.json` now runs v6 (`v6_gate.py`, `v6_feedback.py`, `inbox.py`, `record.py`).
+  The earlier v3 hooks are kept in `settings_v3.json`
 - no arm has been graded. `grade_rw.sh` needs `hurl` (`brew install hurl`)
 - the word-overlap recall net still produces most of the findings; the judge discards them, but
   each one costs a judge call

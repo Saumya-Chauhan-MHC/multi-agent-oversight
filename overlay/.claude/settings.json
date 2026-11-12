@@ -6,10 +6,6 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record.py\" session_start"
-          },
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/inject.py\""
           }
         ]
       }
@@ -23,11 +19,8 @@
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/cap.py\" warn"
-          },
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/note_capture.py\""
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/v6_feedback.py\"",
+            "timeout": 120
           }
         ]
       }
@@ -37,30 +30,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/cap.py\" gate"
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record.py\" pre_tool"
           },
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record.py\" pre_tool"
-          }
-        ]
-      },
-      {
-        "matcher": "Agent|Task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/gate.py\"",
-            "timeout": 3600
-          }
-        ]
-      },
-      {
-        "matcher": "Bash|Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/action_gate.py\"",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/v6_gate.py\"",
             "timeout": 120
           }
         ]
@@ -72,10 +46,6 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record.py\" post_tool"
-          },
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/cap.py\" warn"
           },
           {
             "type": "command",
@@ -100,11 +70,6 @@
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record.py\" subagent_stop"
-          },
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/catchup.py\"",
-            "timeout": 30
           }
         ]
       }
