@@ -261,8 +261,9 @@ judge6.j2.run = lambda *a, **k: (json.dumps(dict(departs=False)), None)
 check("a no stays silent", judge6.preference_departs(tmj, dict(agent="a"), "x") is None)
 
 # Every verdict is recorded, not only the ones that speak: precision needs the denominator.
+# The reason strings below are for one draw; the 2-of-3 vote on top of it is checked after.
 judge6.j2.run = lambda *a, **k: (json.dumps(dict(departs=False)), None)
-check("a no carries its reason", judge6.preference_check(tmj, {}, "x") == (None, "no departure"))
+check("a no carries its reason", judge6._preference_check1(tmj, {}, "x") == (None, "no departure"))
 
 # Regression: `departs` was the first field in the schema, so the model answered before it had
 # reasoned and then reasoned its way to the opposite in `why` -- "the action actually complies
@@ -274,7 +275,7 @@ for contradiction in ("The action actually complies with P3, so there is no depa
     judge6.j2.run = lambda *a, **k: (json.dumps(dict(
         does="d", why=contradiction, departs=True, pid="P1",
         said="Each endpoint family is owned by exactly one subagent.")), None)
-    got, why = judge6.preference_check(tmj, {}, "x")
+    got, why = judge6._preference_check1(tmj, {}, "x")
     check("a verdict contradicting its own reasoning is a no", got is None)
     check("and says so", why == "verdict contradicted its own reasoning")
 
@@ -283,14 +284,27 @@ judge6.j2.run = lambda *a, **k: (json.dumps(dict(
     departs=True, pid="P1",
     said="Each endpoint family is owned by exactly one subagent.")), None)
 check("a verdict its reasoning supports still passes",
-      judge6.preference_check(tmj, {}, "x")[0] is not None)
+      judge6._preference_check1(tmj, {}, "x")[0] is not None)
 judge6.j2.run = lambda *a, **k: (json.dumps(
     dict(departs=True, pid="P1", said="not in the rule")), None)
 check("an invented quote is recorded as unquoted",
-      judge6.preference_check(tmj, {}, "x")[1] == "unquoted")
+      judge6._preference_check1(tmj, {}, "x")[1] == "unquoted")
 judge6.j2.run = lambda *a, **k: (None, "timeout")
 check("an unreachable judge says so",
-      "unavailable" in judge6.preference_check(tmj, {}, "x")[1])
+      "unavailable" in judge6._preference_check1(tmj, {}, "x")[1])
+
+# Round 5: a departure needs a majority of judge6.VOTES draws, and the reason says how many.
+judge6.j2.run = lambda *a, **k: (json.dumps(dict(departs=False)), None)
+check("with 3 draws, three noes stay silent and are counted",
+      judge6.preference_check(tmj, {}, "x") == (None, "no departure (0 of 3 draws)"))
+_draws = iter([True, False, False])
+judge6.j2.run = lambda *a, **k: (json.dumps(dict(departs=next(_draws), pid="P1",
+    said="Each endpoint family is owned by exactly one subagent.")), None)
+check("one yes in three draws is not a departure", judge6.preference_check(tmj, {}, "x")[0] is None)
+judge6.j2.run = lambda *a, **k: (json.dumps(dict(departs=True, pid="P1",
+    said="Each endpoint family is owned by exactly one subagent.")), None)
+check("three yeses are a departure, with the count",
+      judge6.preference_check(tmj, {}, "x")[1] == "departs (3 of 3 draws)")
 
 # Regression: the word-overlap net only fires when the action's text shares vocabulary with the
 # rule, and a real violation usually shares none. `import sqlite3` departs from "the storage

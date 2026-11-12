@@ -10,6 +10,13 @@ time it stays quiet, which is most of the time.
 > Research prototype, used in a study on human oversight of coding agents. Tested on macOS with
 > Claude Code, on SWE-Marathon and ProgramBench tasks.
 
+## Latest version
+
+The current tool lives in [`overlay/oversight/v6/`](overlay/oversight/v6/README.md). It is the
+version replayed in the swe3 comparison (called v1 there). Its README covers what it does, how to
+give it preferences (set them yourself, or extract them), and where every piece is. The rest of
+this page describes the earlier version, which is kept for reference.
+
 ## What it actually says
 
 These are two real notices from a run of the SWE-Marathon `slack-clone` task.

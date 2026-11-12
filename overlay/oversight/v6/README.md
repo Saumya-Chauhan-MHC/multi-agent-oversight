@@ -53,10 +53,74 @@ exact words, and allows three outcomes: `keep`, `narrow`, `replace`. Two guards:
 Every revision appends to the preference's `history`, so "your preferences are changing" is
 something the tool can show: original wording, what it became, and the sentence that moved it.
 
+## Preferences: set them, or extract them
+
+Before the agents start, the tool needs three preferences: **scope** (how far the change may
+reach), **shared** (what to build on) and **checks** (which tests or commands show it works).
+There are two ways to give them. Both write `oversight/task_model.json`, which the gate reads.
+
+```
+# set: you write them
+python3 oversight/v6/prefs_setup.py set prefs.json --proj DIR
+#   prefs.json = {"scope": "...", "shared": "...", "checks": "..."}
+
+# extract: the tool builds them from the request and the repo
+python3 oversight/v6/prefs_setup.py extract --proj DIR [--prompt FILE] [--discussion FILE] [--merged-fix FILE]
+```
+
+- **set** uses your sentences as written, marked `source: user`. A rule that names no file,
+  function or command is kept but reported, because neither the gate nor a labeller can check it.
+- **extract** runs `extract.py`, the pipeline used for the swe3 preferences:
+  1. quotes from the request,
+  2. a repo search (code plus a read-only agent) that decides which choices are really open,
+  3. answers from the project docs, the discussion, then the merged fix when there is one.
+  Every quote and file must exist in its source. A preference nothing answers gets a default
+  marked `confirm: true`, to check with the developer.
+- Either way, preferences still move during the run through `v6_feedback.py`.
+
+The ids and categories match the swe3 replay files: P11 scope (P4), P12 shared (P2), P13 checks (P3).
+`set` on the swe3 sentences reproduces each task's `rules.json`.
+
+## Where the pieces are
+
+Paths are inside `overlay/`.
+
+**Monitoring and surfacing**
+
+| Piece | What it does | File |
+|---|---|---|
+| Entry point | Runs before every Bash, Edit, Write or spawn call and decides whether to flag | `.claude/hooks/v6_gate.py` |
+| Answer capture | Turns the user's next message into the answer to a flag and updates preferences | `.claude/hooks/v6_feedback.py` |
+| Preference setup | Set the preferences yourself, or extract them | `oversight/v6/prefs_setup.py`, `oversight/v6/extract.py` |
+| Preferences | Keep, narrow or replace on feedback, with history; also builds P1 to P4 from a requirements doc | `oversight/v6/prefs.py` |
+| Safety checks | Code checks for collusion, miscoordination and conflict | `oversight/v6/safety.py` |
+| Judge | AI check of whether an action departs from a preference (2 of 3 votes) | `oversight/v6/judge6.py` |
+| Queue | Two channels (safety and preference), one at a time, 10-minute quiet window, same-kind merge, interface exception | `oversight/v6/surface.py` |
+| State | One record per session (`task_model.json`) and the dependency map | `oversight/v3/taskmodel.py` (reused) |
+| Event log | Writes every event to `oversight/events.jsonl` | `oversight/align.py` (reused) |
+| Context | Builds what the judge sees | `oversight/v5/context.py` (reused) |
+
+**Visualization**
+
+| Piece | What it does | File |
+|---|---|---|
+| DAG viewer | Agents as boxes, shared-file arrows, hot files, safety colours, preferences panel with how often each changed, counts and queue depth | `oversight/v6/viewer/serve.py`, run with `python3 oversight/v6/viewer/serve.py` |
+
+**Testing and demo**
+
+| Piece | File |
+|---|---|
+| Tests | `oversight/v6/tests/test_v6.py`, `oversight/v6/tests/test_prefs_setup.py` |
+| Demo, all 8 stages through the real hook | `oversight/v6/demo6.py`, `demo_live.py`, `drive_demo.py` |
+| Screenshots of each demo stage | `oversight/v6/shot.py` |
+
+The replay code and the swe3 data (rollouts, ground truth, results) are on the `replay-code` branch.
+
 ## Run it
 
 ```
-python3 oversight/v6/tests/test_v6.py        # 63 checks
+python3 oversight/v6/tests/test_v6.py        # 111 checks
+python3 oversight/v6/tests/test_prefs_setup.py
 python3 oversight/v6/demo6.py                # all 8 stages, through the real hook
 OV_DEMO_LIVE_JUDGE=1 python3 oversight/v6/demo6.py
 python3 oversight/v6/shot.py ~/Downloads/v6_screenshots
