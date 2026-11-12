@@ -137,8 +137,12 @@ except Exception:
 _cur.append(dict(key=item["key"], kind=head.get("kind"), pid=head.get("pid"), pids=head.get("pids"), risk=head.get("risk"),
                  category=head.get("category"), action=head.get("action"), detail=str(head.get("detail") or "")[:200]))
 json.dump(_cur, open(OPEN, "w"))
+# tool_use_id ties the answer to this exact call: its post_tool event appears only if it ran.
+# `raw` is the fallback for payloads without one.
 json.dump(dict(channel=item["channel"], key=item["key"], pid=head.get("pid"),
-               target=head.get("action"), ts=time.time()),
+               target=head.get("action"), tool_use_id=data.get("tool_use_id"),
+               raw=str(ti.get("file_path") or ti.get("command") or ti.get("prompt") or ""),
+               ts=time.time()),
           open(os.path.join(surface.ctl(PROJ), "awaiting.json"), "w"))
 
 print(json.dumps({"systemMessage": text,

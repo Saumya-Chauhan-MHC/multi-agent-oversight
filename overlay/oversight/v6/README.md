@@ -110,7 +110,7 @@ Paths are inside `overlay/`.
 
 | Piece | File |
 |---|---|
-| Tests | `oversight/v6/tests/test_v6.py`, `oversight/v6/tests/test_prefs_setup.py` |
+| Tests | `oversight/v6/tests/test_v6.py`, `test_prefs_setup.py`, `test_feedback.py` |
 | Demo, all 8 stages through the real hook | `oversight/v6/demo6.py`, `demo_live.py`, `drive_demo.py` |
 | Screenshots of each demo stage | `oversight/v6/shot.py` |
 
@@ -121,6 +121,7 @@ The replay code and the swe3 data (rollouts, ground truth, results) are on the `
 ```
 python3 oversight/v6/tests/test_v6.py        # 111 checks
 python3 oversight/v6/tests/test_prefs_setup.py
+python3 oversight/v6/tests/test_feedback.py
 python3 oversight/v6/demo6.py                # all 8 stages, through the real hook
 OV_DEMO_LIVE_JUDGE=1 python3 oversight/v6/demo6.py
 python3 oversight/v6/shot.py ~/Downloads/v6_screenshots

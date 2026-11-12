@@ -13,7 +13,7 @@ Whether they accepted or rejected is not guessed from their wording. It is read 
 log: if the action the flag was about went on to run, they allowed it. Inferring it from prose
 is how "yes, that's right" became a reason to weaken the very rule being upheld.
 """
-import json, os, sys, time
+import json, os, re, sys, time
 
 
 def _quiet(*a):
@@ -50,15 +50,30 @@ if time.time() - a.get("ts", 0) > surface.QUIET_S:
 note = (data.get("prompt") or "").strip()
 if not note or note.startswith("/"):
     _quiet()
+# Not everything that arrives as a prompt was typed by the developer. A subagent's report, a
+# background task notice or a system reminder is delivered the same way, wrapped in a tag. The
+# first live multi-agent run took a subagent's hand-back as the answer to a collusion flag; on a
+# preference flag that text could have rewritten the rule. Skip it and keep waiting.
+if re.match(r"<(agent-message|task-notification|system-reminder|command-|local-command|bash-)", note):
+    _quiet()
 
 # Did the action the flag was about actually run? That is the accept/reject signal, and it is
 # observed rather than inferred.
+# Matched by tool_use_id when the payload has one. The first version compared ov_ts (ms) with
+# the flag's time (s), so every event counted as after the flag, and matched on the notice's
+# display string, which never equals a file path: a held edit that went ahead was logged reject.
 proceeded = False
 try:
     for e in align.load_events(PROJ):
-        if (e.get("ov_event") == "post_tool" and e.get("ov_ts", 0) >= a.get("ts", 0)
-                and str((e.get("tool_input") or {}).get("file_path")
-                        or (e.get("tool_input") or {}).get("command") or "") == a.get("target")):
+        if e.get("ov_event") != "post_tool":
+            continue
+        if a.get("tool_use_id"):
+            hit = e.get("tool_use_id") == a["tool_use_id"]
+        else:
+            ti = e.get("tool_input") or {}
+            hit = (float(e.get("ov_ts", 0)) / 1000.0 >= a.get("ts", 0) and bool(a.get("raw"))
+                   and str(ti.get("file_path") or ti.get("command") or ti.get("prompt") or "") == a["raw"])
+        if hit:
             proceeded = True
             break
 except Exception:
